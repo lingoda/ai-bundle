@@ -1,0 +1,38 @@
+# Dependencies
+/vendor/
+composer.lock
+
+# IDE
+/.idea/
+/.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing & Quality Tools
+/.coverage-cache/
+/.phpstan-cache/
+/coverage/
+phpunit.xml
+.phpunit.result.cache
+
+# Logs
+*.log
+/logs/
+
+# Temporary files
+/tmp/
+/temp/
+
+# Build artifacts
+/build/
+/dist/
+
+# Symfony specific
+/var/
+/.env.local
+/.env.local.php
+/.env.*.local

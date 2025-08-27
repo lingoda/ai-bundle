@@ -1,0 +1,19 @@
+includes:
+	- vendor/phpstan/phpstan/conf/bleedingEdge.neon
+	- phpstan-baseline.neon
+parameters:
+    tmpDir: .phpstan-cache
+    parallel:
+        processTimeout: 360.0
+    level: 9
+    checkMissingCallableSignature: true
+    polluteScopeWithLoopInitialAssignments: false
+    polluteScopeWithAlwaysIterableForeach: false
+    checkExplicitMixedMissingReturn: true
+    checkFunctionNameCase: true
+    treatPhpDocTypesAsCertain: false
+    exceptions:
+        check:
+            missingCheckedExceptionInThrows: true
+            tooWideThrowType: true
+        implicitThrows: true

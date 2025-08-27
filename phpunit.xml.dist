@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- https://phpunit.readthedocs.io/en/latest/configuration.html -->
+<phpunit
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd"
+        backupGlobals="false"
+        colors="true"
+        bootstrap="tests/bootstrap.php"
+        displayDetailsOnTestsThatTriggerDeprecations="true"
+        displayDetailsOnTestsThatTriggerErrors="true"
+        displayDetailsOnTestsThatTriggerNotices="true"
+        displayDetailsOnTestsThatTriggerWarnings="true">
+    <php>
+        <ini name="display_errors" value="1" />
+        <ini name="error_reporting" value="-1" />
+        <server name="APP_ENV" value="test" force="true" />
+        <server name="APP_DEBUG" value="false" />
+        <server name="SHELL_VERBOSITY" value="-1" />
+    </php>
+
+    <testsuites>
+        <testsuite name="Lingoda AI Bundle Test Suite">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+
+    <source
+            restrictDeprecations="true"
+            restrictNotices="false"
+            restrictWarnings="false">
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+
+    <coverage cacheDirectory=".coverage-cache" />
+</phpunit>

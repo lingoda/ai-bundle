@@ -1,0 +1,64 @@
+framework:
+    test: true
+    secret: 'test'
+    cache:
+        app: cache.adapter.array
+        pools:
+            rate_limiter_cache:
+                adapter: cache.adapter.array
+    lock:
+        flock: ~
+    rate_limiter:
+        # Basic in-memory storage for testing
+        test_storage:
+            policy: 'token_bucket'
+            limit: 100
+            rate:
+                interval: '1 minute'
+                amount: 100
+
+lingoda_ai:
+    default_provider: 'openai'
+    providers:
+        openai:
+            api_key: 'sk-test-key'
+            organization: 'test-org'
+            default_model: 'gpt-4o-mini'
+        anthropic:
+            api_key: 'sk-ant-test-key'
+            default_model: 'claude-sonnet-4'
+    sanitization:
+        enabled: true
+    logging:
+        enabled: false
+    rate_limiting:
+        enabled: true
+        storage: 'rate_limiter_cache'
+        lock_factory: 'lock.flock.factory'
+        providers:
+            openai:
+                requests:
+                    policy: 'token_bucket'
+                    limit: 180
+                    rate:
+                        interval: '1 minute'
+                        amount: 180
+                tokens:
+                    policy: 'token_bucket'
+                    limit: 450000
+                    rate:
+                        interval: '1 minute'
+                        amount: 450000
+            anthropic:
+                requests:
+                    policy: 'token_bucket'
+                    limit: 100
+                    rate:
+                        interval: '1 minute'
+                        amount: 100
+                tokens:
+                    policy: 'token_bucket'
+                    limit: 100000
+                    rate:
+                        interval: '1 minute'
+                        amount: 100000

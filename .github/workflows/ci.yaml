@@ -1,0 +1,70 @@
+name: ci
+on:
+  pull_request: ~
+  push:
+    branches:
+      - main
+
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.3', '8.4']
+        symfony: ['6.4', '7.3']
+      fail-fast: false
+    steps:
+      -   name: cancel
+          uses: styfle/cancel-workflow-action@0.12.1
+
+      -   name: checkout
+          uses: actions/checkout@v4
+
+      -   name: Setup PHP
+          uses: shivammathur/setup-php@2.30.4
+          with:
+              php-version: ${{ matrix.php }}
+
+      -   name: Composer update on PHP ${{ matrix.php }} and Symfony ${{ matrix.symfony }}
+          run: |
+            composer require --no-update symfony/flex
+            composer config --no-plugins allow-plugins.symfony/flex true
+            SYMFONY_REQUIRE=${{ matrix.symfony }} composer install --classmap-authoritative --prefer-dist
+
+      -   name: Lint
+          if: ${{ !cancelled() }}
+          run: composer validate
+
+      -   name: Styling
+          if: ${{ !cancelled() }}
+          run: vendor/bin/ecs check src --config=ecs.php
+
+      -   name: Static analysis on src with PHPStan
+          if: ${{ !cancelled() }}
+          run: vendor/bin/phpstan analyse -c phpstan.neon --memory-limit=1G --no-progress --no-interaction
+
+      -   name: Static analysis on tests with PHPStan
+          if: ${{ !cancelled() }}
+          run: vendor/bin/phpstan analyse -c phpstan.tests.neon --memory-limit=1G --no-progress --no-interaction
+
+      -   name: Run unit tests
+          if: ${{ !cancelled() }}
+          run: vendor/bin/phpunit --coverage-php /tmp/coverage/unit/phpunit.cov
+
+      -   name: Install phpcov
+          run: |
+              sudo apt-get install wget
+              wget https://phar.phpunit.de/phpcov.phar
+
+      -   name: Generate coverage report
+          run: php phpcov.phar merge --clover /tmp/coverage/full.xml /tmp/coverage
+
+      -   name: Upload tests coverage report
+          uses: codecov/codecov-action@v4
+          with:
+              fail_ci_if_error: true
+              token: ${{ secrets.CODECOV_TOKEN }}
+              files: /tmp/coverage/full.xml

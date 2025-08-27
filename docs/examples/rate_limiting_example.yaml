@@ -1,0 +1,116 @@
+# Example configuration for Lingoda AI Bundle with Rate Limiting
+
+# Standard Symfony framework configuration
+framework:
+    cache:
+        # Configure a Redis cache adapter for production rate limiting
+        # This allows multiple application instances to share rate limit state
+        pools:
+            rate_limiter_pool:
+                adapter: cache.adapter.redis
+                default_lifetime: 3600
+
+    # Optional: Configure locks for coordination across instances
+    lock:
+        redis:
+            dsn: '%env(REDIS_URL)%'
+
+    # Built-in Symfony rate limiters (optional - Bundle will create its own)
+    rate_limiter:
+        # Example of a custom rate limiter that can be used alongside AI SDK limiters
+        api_general:
+            policy: 'token_bucket'
+            limit: 1000
+            rate:
+                interval: '1 hour'
+                amount: 1000
+
+# Lingoda AI Bundle configuration
+lingoda_ai:
+    # Basic provider setup
+    default_provider: 'openai'
+    providers:
+        openai:
+            api_key: '%env(OPENAI_API_KEY)%'
+            default_model: 'gpt-4o-mini'
+            timeout: 30
+        anthropic:
+            api_key: '%env(ANTHROPIC_API_KEY)%'  
+            default_model: 'claude-sonnet-4'
+            timeout: 30
+        gemini:
+            api_key: '%env(GEMINI_API_KEY)%'
+            default_model: 'gemini-2.5-flash'
+            timeout: 30
+
+    # Enable rate limiting
+    rate_limiting:
+        enabled: true
+        
+        # Storage service for rate limit state (defaults to cache.rate_limiter)
+        # Use Redis in production for shared state across instances
+        storage: 'rate_limiter_pool'
+        
+        # Lock factory for coordination (defaults to lock.factory) 
+        lock_factory: 'lock.redis.factory'
+        
+        # Retry configuration for rate limiting
+        enable_retries: true        # Enable automatic retries on rate limit (default: true)
+        max_retries: 10             # Maximum retry attempts (default: 10)
+                                    # Set enable_retries: false for testing to see raw rate limit exceptions
+        
+        # Provider-specific rate limits
+        providers:
+            # OpenAI rate limits (Tier 1 example)
+            openai:
+                requests:
+                    policy: 'token_bucket'
+                    limit: 180      # Tier 1: 200 RPM (90% for safety)
+                    rate:
+                        interval: '1 minute'
+                        amount: 180
+                tokens:
+                    policy: 'token_bucket'  
+                    limit: 450000   # Tier 1: 500k TPM (90% for safety)
+                    rate:
+                        interval: '1 minute'
+                        amount: 450000
+
+            # Anthropic rate limits (Free tier example)
+            anthropic:
+                requests:
+                    policy: 'token_bucket'
+                    limit: 100      # Free tier: 100 RPM
+                    rate:
+                        interval: '1 minute'
+                        amount: 100
+                tokens:
+                    policy: 'token_bucket'
+                    limit: 100000   # Free tier: 100k TPM  
+                    rate:
+                        interval: '1 minute'
+                        amount: 100000
+
+            # Gemini rate limits (Free tier example)
+            gemini:
+                requests:
+                    policy: 'token_bucket'
+                    limit: 1000     # Free tier: 1000 RPM (generous)
+                    rate:
+                        interval: '1 minute'  
+                        amount: 1000
+                tokens:
+                    policy: 'token_bucket'
+                    limit: 1000000  # Free tier: 1M TPM
+                    rate:
+                        interval: '1 minute'
+                        amount: 1000000
+
+    # Other Bundle features
+    sanitization:
+        enabled: true
+        patterns: []  # Custom sensitive data patterns
+        
+    logging:
+        enabled: true
+        service: 'logger'  # Use custom logger service if needed

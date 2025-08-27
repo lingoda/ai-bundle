@@ -1,0 +1,20 @@
+includes:
+    - phpstan.common.neon
+parameters:
+    resultCachePath: '%tmpDir%/resultCache-src.php'
+    paths:
+        - src
+    exceptions: # https://phpstan.org/blog/bring-your-exceptions-under-control
+        check:
+            missingCheckedExceptionInThrows: true
+            tooWideThrowType: true
+        uncheckedExceptionRegexes:
+            - '#^Exception$#' # Mark general Exception as unchecked, subclasses are still checked
+        uncheckedExceptionClasses:
+            - RuntimeException # https://www.php.net/manual/en/class.runtimeexception.php
+            - LogicException # https://www.php.net/manual/en/class.logicexception.php
+            - TypeError # https://www.php.net/manual/en/class.typeerror.php
+            - Psr\Cache\InvalidArgumentException
+            - Psr\Container\ContainerExceptionInterface
+            - ReflectionException
+            - JsonException

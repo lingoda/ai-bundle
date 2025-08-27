@@ -1,0 +1,31 @@
+parameters:
+    tmpDir: .phpstan-cache
+    level: 6
+    resultCachePath: '%tmpDir%/resultCache-tests.php'
+    paths:
+        - tests
+    
+    # Test-specific relaxed rules
+    checkMissingCallableSignature: false
+    checkExplicitMixedMissingReturn: false
+    treatPhpDocTypesAsCertain: false
+    polluteScopeWithLoopInitialAssignments: false
+    polluteScopeWithAlwaysIterableForeach: false
+    
+    # Exception handling - relaxed for tests
+    exceptions:
+        check:
+            missingCheckedExceptionInThrows: false
+            tooWideThrowType: false
+        implicitThrows: false
+    
+    # Ignore common test patterns that are acceptable
+    ignoreErrors:
+        # PHPUnit createMock() unresolvable return types
+        - '#Return type of call to method PHPUnit\\Framework\\TestCase::createMock\(\) contains unresolvable type#'
+        - '#PHPDoc tag @var for property .* contains unresolvable type#'
+        - '#PHPDoc tag @var for variable .* contains unresolvable type#'
+        - '#Parameter \#1 \$expected of static method PHPUnit\\Framework\\Assert::assertSame\(\) contains unresolvable type#'
+        
+        # Allow trivial assertions in tests
+        - '#Call to method PHPUnit\\Framework\\Assert::.* will always evaluate to true#'

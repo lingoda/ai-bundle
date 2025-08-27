@@ -1,0 +1,59 @@
+{
+    "name": "lingoda/ai-bundle",
+    "type": "symfony-bundle",
+    "description": "Symfony Bundle for Lingoda AI PHP SDK with full framework integration",
+    "keywords": ["symfony", "ai", "openai", "anthropic", "gemini", "bundle"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Balazs Csaba",
+            "email": "csaba.balazs@lingoda.com"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "lingoda/ai-sdk": "^1.0.0",
+        "symfony/config": "^6.4|^7.0",
+        "symfony/console": "^6.4|^7.0",
+        "symfony/dependency-injection": "^6.4|^7.0",
+        "symfony/framework-bundle": "^6.4|^7.0",
+        "symfony/lock": "^6.4|^7.0",
+        "symfony/rate-limiter": "^6.4|^7.0",
+        "symfony/yaml": "^6.4|^7.0",
+        "webmozart/assert": "^1.11"
+    },
+    "require-dev": {
+        "dg/bypass-finals": "^1.7",
+        "matthiasnoback/symfony-dependency-injection-test": "^6.1",
+        "nyholm/symfony-bundle-test": "^3.1",
+        "phpunit/phpunit": "^10.5",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-phpunit": "^2.0",
+        "phpstan/phpstan-webmozart-assert": "^2.0",
+        "symplify/easy-coding-standard": "^12.0",
+        "symfony/phpunit-bridge": "^6.4|^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Lingoda\\AiBundle\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Lingoda\\AiBundle\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
+    },
+    "extra": {
+        "symfony": {
+            "require": "^6.4|^7.0"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

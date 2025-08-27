@@ -1,0 +1,42 @@
+# Configure your AI providers
+lingoda_ai:
+    default_provider: openai
+    providers:
+        openai:
+            api_key: '%env(OPENAI_API_KEY)%'
+            default_model: 'gpt-4o-2024-11-20'
+            # Optional: Use custom HTTP client for OpenAI requests
+            # http_client: 'openai.http_client'
+            # timeout: 30
+        anthropic:
+            api_key: '%env(ANTHROPIC_API_KEY)%'
+            default_model: 'claude-sonnet-4-20250514'
+            # Optional: Use custom HTTP client for Anthropic requests
+            # http_client: 'anthropic.http_client'
+            # timeout: 30
+        gemini:
+            api_key: '%env(GEMINI_API_KEY)%'
+            default_model: 'gemini-2.5-flash'
+            # Optional: Use custom HTTP client for Gemini requests
+            # http_client: 'gemini.http_client'
+            # timeout: 30
+    sanitization:
+        enabled: true
+#        patterns: []
+    logging:
+        enabled: true
+#        service: 'logger'
+    rate_limiting:
+        enabled: true  # Enhanced rate limiting enabled by default
+#        storage: 'cache.rate_limiter'  # Cache service for rate limit state
+#        lock_factory: 'lock.factory'   # Lock factory for coordination
+#        enable_retries: true           # Enable automatic retries on rate limits (default: true)
+#        max_retries: 10               # Maximum retry attempts (default: 10)
+#        providers:
+#            openai:
+#                requests:
+#                    policy: 'token_bucket'
+#                    limit: 180
+#                    rate:
+#                        interval: '1 minute'
+#                        amount: 180

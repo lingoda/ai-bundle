@@ -1,0 +1,20 @@
+framework:
+    test: true
+    secret: 'test'
+
+lingoda_ai:
+    default_provider: 'openai'
+    providers:
+        openai:
+            api_key: 'sk-test-key'
+            organization: 'test-org'
+            default_model: 'gpt-4o-mini'
+        anthropic:
+            api_key: 'sk-ant-test-key'
+            default_model: 'claude-sonnet-4'
+    sanitization:
+        enabled: true
+    logging:
+        enabled: false
+    rate_limiting:
+        enabled: false  # Explicitly disabled for this basic test (Bundle default is true)

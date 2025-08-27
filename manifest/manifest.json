@@ -1,0 +1,34 @@
+{
+    "bundles": {
+        "Lingoda\\AiBundle\\LingodaAiBundle": ["all"]
+    },
+    "copy-from-recipe": {
+        "config/": "%CONFIG_DIR%/"
+    },
+    "env": {
+        "#1": "###> lingoda/ai-bundle ###",
+        "#2": "# Configure your AI provider API keys",
+        "OPENAI_API_KEY": "",
+        "OPENAI_ORGANIZATION": "",
+        "ANTHROPIC_API_KEY": "",
+        "GEMINI_API_KEY": "",
+        "#3": "###< lingoda/ai-bundle ###"
+    },
+    "post-install-output": [
+        "",
+        "<bg=blue;fg=white>              </> <info>Lingoda AI Bundle installed!</info>",
+        "",
+        "  <comment>Next steps:</comment>",
+        "  1. <comment>Add your API keys to <info>.env</info></comment>",
+        "  2. <comment>Configuration file created: <info>config/packages/lingoda_ai.yaml</info></comment>", 
+        "",
+        "  <comment>Test your setup:</comment>",
+        "  • <comment>Test connections: <info>php bin/console ai:test:connection</info></comment>",
+        "  • <comment>Test rate limiting: <info>php bin/console ai:test:rate-limiting</info></comment>",
+        "  • <comment>List providers: <info>php bin/console ai:list:providers</info></comment>",
+        "  • <comment>List models: <info>php bin/console ai:list:models</info></comment>",
+        "",
+        "  Documentation: <comment>https://github.com/lingoda/ai-bundle</comment>",
+        ""
+    ]
+}
