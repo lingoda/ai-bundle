@@ -32,7 +32,7 @@ jobs:
           run: |
             composer require --no-update symfony/flex
             composer config --no-plugins allow-plugins.symfony/flex true
-            SYMFONY_REQUIRE=${{ matrix.symfony }} composer install --classmap-authoritative --prefer-dist
+            SYMFONY_REQUIRE=${{ matrix.symfony }} composer install --classmap-authoritative --prefer-dist --no-scripts
 
       -   name: Lint
           if: ${{ !cancelled() }}
@@ -57,7 +57,7 @@ jobs:
       -   name: Install phpcov
           run: |
               sudo apt-get install wget
-              wget https://phar.phpunit.de/phpcov.phar
+              wget https://phar.phpunit.de/phpcov-10.0.1.phar -O phpcov.phar
 
       -   name: Generate coverage report
           run: php phpcov.phar merge --clover /tmp/coverage/full.xml /tmp/coverage
