@@ -7,7 +7,7 @@ namespace Lingoda\AiBundle;
 use Lingoda\AiBundle\Command\AiListModelsCommand;
 use Lingoda\AiBundle\Command\AiListProvidersCommand;
 use Lingoda\AiBundle\Command\AiTestConnectionCommand;
-use Lingoda\AiBundle\Command\TestRateLimitingCommand;
+use Lingoda\AiBundle\Command\AiTestRateLimitingCommand;
 use Lingoda\AiBundle\Platform\ProviderPlatform;
 use Lingoda\AiBundle\RateLimit\BundleExternalRateLimiter;
 use Lingoda\AiSdk\Client\Anthropic\AnthropicClient;
@@ -274,12 +274,12 @@ final class LingodaAiBundle extends AbstractBundle
             $builder->setDefinition(AiListModelsCommand::class, $listModelsCommandDef);
             
             // Register rate limiting test command with Platform dependency
-            $testRateLimitCommandDef = new Definition(TestRateLimitingCommand::class, [
+            $testRateLimitCommandDef = new Definition(AiTestRateLimitingCommand::class, [
                 new Reference(PlatformInterface::class),
                 new Reference('parameter_bag'),
             ]);
             $testRateLimitCommandDef->addTag('console.command');
-            $builder->setDefinition(TestRateLimitingCommand::class, $testRateLimitCommandDef);
+            $builder->setDefinition(AiTestRateLimitingCommand::class, $testRateLimitCommandDef);
         }
     }
 

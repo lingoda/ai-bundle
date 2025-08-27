@@ -33,7 +33,7 @@ use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
     name: 'ai:test:rate-limiting',
     description: 'Test rate limiting functionality with your actual configuration'
 )]
-final class TestRateLimitingCommand extends Command
+final class AiTestRateLimitingCommand extends Command
 {
     public function __construct(
         private readonly ?PlatformInterface $platform = null,
@@ -503,6 +503,7 @@ final class TestRateLimiter implements \Lingoda\AiSdk\RateLimit\RateLimiterInter
 }
 
 /**
+ * Mock client that simulates AI responses without making real API calls
  * Mock client that simulates AI responses without making real API calls
  */
 final class MockClient implements ClientInterface
