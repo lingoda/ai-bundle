@@ -34,6 +34,7 @@ jobs:
           if: ${{ !cancelled() }}
           run: |
             composer require --no-update symfony/flex
+            composer config --no-plugins allow-plugins.symfony/flex false
             SYMFONY_REQUIRE=${{ matrix.symfony }} composer install --classmap-authoritative --prefer-dist
 
       -   name: Lint
