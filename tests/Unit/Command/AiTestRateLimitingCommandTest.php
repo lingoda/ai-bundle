@@ -1,5 +1,6 @@
 <?php
-declare(strict_types=1);
+
+declare(strict_types = 1);
 
 namespace Lingoda\AiBundle\Tests\Unit\Command;
 
@@ -42,7 +43,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
     public function testCommandWithoutPlatformOrParameterBag(): void
     {
         $command = new AiTestRateLimitingCommand();
-        
+
         self::assertSame('ai:test:rate-limiting', $command->getName());
         self::assertSame('Test rate limiting functionality with your actual configuration', $command->getDescription());
     }
@@ -53,17 +54,17 @@ final class AiTestRateLimitingCommandTest extends TestCase
         // We'll use a command with null platform to trigger the check but capture output before execution
         $command = new AiTestRateLimitingCommand();
         $commandTester = new CommandTester($command);
-        
+
         // Instead of running the full command, just test that the option parsing works
         // This avoids the actual rate limiting execution
         $definition = $command->getDefinition();
-        
+
         self::assertTrue($definition->hasOption('use-mock'));
         self::assertTrue($definition->hasOption('requests'));
         self::assertTrue($definition->hasOption('limit'));
         self::assertTrue($definition->hasOption('delay'));
         self::assertTrue($definition->hasOption('no-retry'));
-        
+
         // Verify the options have the expected defaults
         self::assertEquals('5', $definition->getOption('requests')->getDefault());
         self::assertEquals('2', $definition->getOption('limit')->getDefault());
@@ -73,7 +74,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
     public function testCommandOptionsConfiguration(): void
     {
         $definition = $this->command->getDefinition();
-        
+
         // Test that all expected options are configured
         self::assertTrue($definition->hasOption('use-mock'));
         self::assertTrue($definition->hasOption('requests'));
@@ -83,20 +84,20 @@ final class AiTestRateLimitingCommandTest extends TestCase
         self::assertTrue($definition->hasOption('client-id'));
         self::assertTrue($definition->hasOption('model'));
         self::assertTrue($definition->hasOption('provider'));
-        
+
         // Test option properties
         $requestsOption = $definition->getOption('requests');
         self::assertEquals('r', $requestsOption->getShortcut());
         self::assertEquals('5', $requestsOption->getDefault());
-        
+
         $limitOption = $definition->getOption('limit');
         self::assertEquals('l', $limitOption->getShortcut());
         self::assertEquals('2', $limitOption->getDefault());
-        
+
         $delayOption = $definition->getOption('delay');
         self::assertEquals('d', $delayOption->getShortcut());
         self::assertEquals('100', $delayOption->getDefault());
-        
+
         $clientIdOption = $definition->getOption('client-id');
         self::assertEquals('c', $clientIdOption->getShortcut());
         self::assertEquals('cli-test', $clientIdOption->getDefault());
@@ -106,22 +107,21 @@ final class AiTestRateLimitingCommandTest extends TestCase
     {
         // Test the option parsing logic without executing the command
         // This tests the logic in the execute method for handling invalid option values
-        
+
         $definition = $this->command->getDefinition();
-        
+
         // Test that non-numeric values would fall back to defaults
         // This is testing the is_numeric() checks in the execute method
-        
+
         // requests option should default to 5 if not numeric
-        self::assertFalse(is_numeric('invalid'));
         self::assertEquals('5', $definition->getOption('requests')->getDefault());
-        
-        // delay option should default to 100 if not numeric  
+
+        // delay option should default to 100 if not numeric
         self::assertEquals('100', $definition->getOption('delay')->getDefault());
-        
+
         // limit option should default to 2 if not numeric
         self::assertEquals('2', $definition->getOption('limit')->getDefault());
-        
+
         // Verify the command name and description are correctly set
         self::assertEquals('ai:test:rate-limiting', $this->command->getName());
         self::assertStringContainsString('Test rate limiting functionality', $this->command->getDescription());
@@ -131,11 +131,11 @@ final class AiTestRateLimitingCommandTest extends TestCase
     {
         $command = new AiTestRateLimitingCommand(null, null);
         $commandTester = new CommandTester($command);
-        
+
         $exitCode = $commandTester->execute([]);
 
         self::assertSame(Command::FAILURE, $exitCode);
-        
+
         $display = $commandTester->getDisplay();
         self::assertStringContainsString('No Platform service configured', $display);
         self::assertStringContainsString('Make sure the Bundle is properly', $display);
@@ -153,7 +153,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willReturn($mockResult);
+            ->willReturn($mockResult)
+        ;
 
         // Use minimal settings to avoid delays
         $exitCode = $this->commandTester->execute([
@@ -163,7 +164,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('Configuration', $display);
         self::assertStringContainsString('Real configuration (using Bundle settings)', $display);
@@ -187,7 +188,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willReturn($mockResult);
+            ->willReturn($mockResult)
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
@@ -196,7 +198,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('Using specified model: gpt-4o from provider: openai', $display);
     }
@@ -210,14 +212,16 @@ final class AiTestRateLimitingCommandTest extends TestCase
             ->expects(self::once())
             ->method('getProvider')
             ->with('anthropic')
-            ->willReturn($mockProvider);
+            ->willReturn($mockProvider)
+        ;
 
         $this->setupParameterBagMocks(true);
 
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willReturn($mockResult);
+            ->willReturn($mockResult)
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
@@ -226,7 +230,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('Using default model: claude-3-5-haiku-20241022 from specified provider: anthropic', $display);
     }
@@ -238,14 +242,15 @@ final class AiTestRateLimitingCommandTest extends TestCase
 
         $this->platform
             ->method('getProvider')
-            ->willThrowException(new ModelNotFoundException('Model not found'));
+            ->willThrowException(new ModelNotFoundException('Model not found'))
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--model' => 'nonexistent-model'
         ]);
 
         self::assertSame(Command::FAILURE, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('Failed to resolve model: Model \'nonexistent-model\' not found', $display);
         self::assertStringContainsString('openai', $display);
@@ -255,14 +260,15 @@ final class AiTestRateLimitingCommandTest extends TestCase
     {
         $this->platform
             ->method('getAvailableProviders')
-            ->willReturn([]);
-        
+            ->willReturn([])
+        ;
+
         $this->setupParameterBagMocks(true);
 
         $exitCode = $this->commandTester->execute([]);
 
         self::assertSame(Command::FAILURE, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('No providers available', $display);
     }
@@ -283,7 +289,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
             ->willReturnOnConsecutiveCalls(
                 $this->throwException($rateLimitException),
                 $mockResult
-            );
+            )
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
@@ -291,7 +298,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('⏳ RATE LIMITED', $display);
         self::assertStringContainsString('Retrying in 0s...', $display);
@@ -312,7 +319,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willThrowException($rateLimitException);
+            ->willThrowException($rateLimitException)
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
@@ -320,7 +328,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('✗ RATE LIMITED', $display);
         self::assertStringContainsString('retry after 0s', $display);
@@ -340,7 +348,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::exactly(4)) // Initial + 3 retries
             ->method('ask')
-            ->willThrowException($rateLimitException);
+            ->willThrowException($rateLimitException)
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
@@ -348,7 +357,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('✗ RATE LIMITED', $display);
         self::assertStringContainsString('Max retries reached', $display);
@@ -366,7 +375,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willThrowException(new RuntimeException('Network error'));
+            ->willThrowException(new RuntimeException('Network error'))
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
@@ -374,7 +384,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('⚠ ERROR', $display);
         self::assertStringContainsString('Network error', $display);
@@ -391,7 +401,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willReturn($mockResult);
+            ->willReturn($mockResult)
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
@@ -399,7 +410,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('Successful requests             1', $display);
         self::assertStringContainsString('Requests that hit rate limits   0', $display);
@@ -419,7 +430,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willReturn($mockResult);
+            ->willReturn($mockResult)
+        ;
 
         $exitCode = $commandTester->execute([
             '--requests' => '1',
@@ -427,7 +439,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $commandTester->getDisplay();
         self::assertStringContainsString('Real configuration (using Bundle settings)', $display);
         self::assertStringContainsString('openai', $display);
@@ -446,7 +458,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willReturn($mockResult);
+            ->willReturn($mockResult)
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
@@ -454,7 +467,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('No', $display);
     }
@@ -470,7 +483,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willReturn($mockResult);
+            ->willReturn($mockResult)
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
@@ -478,7 +492,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         // Just check that rate limiting enabled shows as Yes
         self::assertStringContainsString('Yes', $display);
@@ -495,7 +509,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willReturn($mockResult);
+            ->willReturn($mockResult)
+        ;
 
         // Test with array/null options that should be handled gracefully
         $input = $this->createMock(InputInterface::class);
@@ -530,7 +545,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::exactly(3))
             ->method('ask')
-            ->willReturn($mockResult);
+            ->willReturn($mockResult)
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '3',
@@ -538,7 +554,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('Successful requests             3', $display);
         self::assertStringContainsString('Requests that hit rate limits   0', $display);
@@ -562,7 +578,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
             ->willReturnOnConsecutiveCalls(
                 $this->throwException($rateLimitException),
                 $mockResult // Success after retry
-            );
+            )
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
@@ -570,7 +587,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('Rate limiting is working correctly!', $display);
         self::assertStringContainsString('Rate limiting activated on 1 out of 1 requests', $display);
@@ -582,12 +599,12 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $provider = $this->createMock(ProviderInterface::class);
         $provider->method('getDefaultModel')->willReturn($defaultModel);
         $provider->method('getId')->willReturn($id);
-        
+
         // Mock getModel to return a mock model with the expected ID
         $mockModel = $this->createMock(ModelInterface::class);
         $mockModel->method('getId')->willReturn($defaultModel);
         $provider->method('getModel')->willReturn($mockModel);
-        
+
         return $provider;
     }
 
@@ -595,24 +612,28 @@ final class AiTestRateLimitingCommandTest extends TestCase
     {
         $result = $this->createMock(ResultInterface::class);
         $result->method('getContent')->willReturn($content);
-        
+
         return $result;
     }
 
+    /**
+     * @param array<string> $availableProviders
+     */
     private function setupPlatformMocks(
         array $availableProviders,
         ?ProviderInterface $provider
     ): void {
         $this->platform
             ->method('getAvailableProviders')
-            ->willReturn($availableProviders);
+            ->willReturn($availableProviders)
+        ;
 
         if ($provider !== null) {
             $this->platform
                 ->method('getProvider')
-                ->willReturn($provider);
+                ->willReturn($provider)
+            ;
         }
-
     }
 
     private function setupParameterBagMocks(bool $rateLimitingEnabled): void
@@ -625,27 +646,31 @@ final class AiTestRateLimitingCommandTest extends TestCase
                 ['lingoda_ai.rate_limiting.lock_factory', null, null],
                 ['lingoda_ai.rate_limiting.enable_retries', null, true],
                 ['lingoda_ai.rate_limiting.max_retries', null, 3],
-            ]);
+            ])
+        ;
     }
 
     public function testResolveModelWithModelNotFoundInAnyProvider(): void
     {
         $this->setupPlatformMocks(['openai', 'anthropic'], null);
-        
+
         $provider1 = $this->createMockProvider('gpt-4o-mini', 'openai');
         $provider2 = $this->createMockProvider('claude-3-5-haiku-20241022', 'anthropic');
-        
+
         $this->platform
             ->expects(self::exactly(2))
             ->method('getProvider')
-            ->willReturnOnConsecutiveCalls($provider1, $provider2);
-        
+            ->willReturnOnConsecutiveCalls($provider1, $provider2)
+        ;
+
         $provider1->method('getModel')
-            ->willThrowException(new ModelNotFoundException('Model not found'));
-        
+            ->willThrowException(new ModelNotFoundException('Model not found'))
+        ;
+
         $provider2->method('getModel')
-            ->willThrowException(new ModelNotFoundException('Model not found'));
-        
+            ->willThrowException(new ModelNotFoundException('Model not found'))
+        ;
+
         $this->setupParameterBagMocks(true);
 
         $exitCode = $this->commandTester->execute([
@@ -653,7 +678,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::FAILURE, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('not found in any', $display);
     }
@@ -666,14 +691,15 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->method('getProvider')
             ->with('nonexistent')
-            ->willThrowException(new RuntimeException('Provider not found'));
+            ->willThrowException(new RuntimeException('Provider not found'))
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--provider' => 'nonexistent'
         ]);
 
         self::assertSame(Command::FAILURE, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('Failed to resolve model: Provider not found', $display);
         self::assertStringContainsString('openai', $display);
@@ -688,7 +714,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('10 requests per minute', $display);
         self::assertStringContainsString('No requests were rate limited', $display);
@@ -705,7 +731,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('1 requests per minute', $display);
         self::assertStringContainsString('No requests were rate limited', $display);
@@ -723,10 +749,11 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willReturn($mockResult);
+            ->willReturn($mockResult)
+        ;
 
         $startTime = microtime(true);
-        
+
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
             '--delay' => '0' // No delay
@@ -736,10 +763,10 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $duration = ($endTime - $startTime) * 1000; // Convert to milliseconds
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         // Verify that the test runs quickly (under 1 second) with no delays
         self::assertLessThan(1000, $duration); // Should complete in under 1 second
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('0ms', $display);
     }
@@ -755,7 +782,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willReturn($mockResult);
+            ->willReturn($mockResult)
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
@@ -763,7 +791,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('0ms', $display);
     }
@@ -771,7 +799,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
     public function testCommandConfiguration(): void
     {
         $definition = $this->command->getDefinition();
-        
+
         // Test all expected options are defined
         self::assertTrue($definition->hasOption('requests'));
         self::assertTrue($definition->hasOption('limit'));
@@ -781,20 +809,20 @@ final class AiTestRateLimitingCommandTest extends TestCase
         self::assertTrue($definition->hasOption('client-id'));
         self::assertTrue($definition->hasOption('model'));
         self::assertTrue($definition->hasOption('provider'));
-        
+
         // Test option shortcuts
         self::assertSame('r', $definition->getOption('requests')->getShortcut());
         self::assertSame('l', $definition->getOption('limit')->getShortcut());
         self::assertSame('d', $definition->getOption('delay')->getShortcut());
         self::assertSame('m', $definition->getOption('use-mock')->getShortcut());
         self::assertSame('c', $definition->getOption('client-id')->getShortcut());
-        
+
         // Test default values
         self::assertSame('5', $definition->getOption('requests')->getDefault());
         self::assertSame('2', $definition->getOption('limit')->getDefault());
         self::assertSame('100', $definition->getOption('delay')->getDefault());
         self::assertSame('cli-test', $definition->getOption('client-id')->getDefault());
-        
+
         // Test help text
         $help = $this->command->getHelp();
         self::assertStringContainsString('This command tests your actual rate limiting configuration', $help);
@@ -816,7 +844,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willReturn($mockResult);
+            ->willReturn($mockResult)
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
@@ -824,18 +853,18 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
-        
+
         // Check truncation of long response content
         self::assertStringContainsString('Response content that is longer than fifty charact', $display);
-        
+
         // Check result summary
         self::assertStringContainsString('Successful requests             1', $display);
         self::assertStringContainsString('Requests that hit rate limits   0', $display);
         self::assertStringContainsString('Permanently rate limited        0', $display);
         self::assertStringContainsString('Total retry attempts            0', $display);
-        
+
         // Check final messages
         self::assertStringContainsString('No requests were rate limited', $display);
     }
@@ -844,7 +873,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
     {
         $mockProvider = $this->createMockProvider('gpt-4o-mini', 'openai');
         $mockResult = $this->createMock(ResultInterface::class);
-        
+
         // Return non-string content
         $mockResult->method('getContent')->willReturn(['data' => 'array result']);
 
@@ -854,7 +883,8 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $this->platform
             ->expects(self::once())
             ->method('ask')
-            ->willReturn($mockResult);
+            ->willReturn($mockResult)
+        ;
 
         $exitCode = $this->commandTester->execute([
             '--requests' => '1',
@@ -862,7 +892,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         ]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('✓ SUCCESS', $display);
         self::assertStringContainsString('Response received...', $display);
