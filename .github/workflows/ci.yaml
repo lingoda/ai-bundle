@@ -21,18 +21,20 @@ jobs:
           uses: styfle/cancel-workflow-action@0.12.1
 
       -   name: checkout
+          if: ${{ !cancelled() }}
           uses: actions/checkout@v4
 
       -   name: Setup PHP
+          if: ${{ !cancelled() }}
           uses: shivammathur/setup-php@2.30.4
           with:
               php-version: ${{ matrix.php }}
 
       -   name: Composer update on PHP ${{ matrix.php }} and Symfony ${{ matrix.symfony }}
+          if: ${{ !cancelled() }}
           run: |
             composer require --no-update symfony/flex
-            composer config --no-plugins allow-plugins.symfony/flex true
-            SYMFONY_REQUIRE=${{ matrix.symfony }} composer install --classmap-authoritative --prefer-dist --no-scripts
+            SYMFONY_REQUIRE=${{ matrix.symfony }} composer install --classmap-authoritative --prefer-dist
 
       -   name: Lint
           if: ${{ !cancelled() }}
@@ -55,14 +57,17 @@ jobs:
           run: vendor/bin/phpunit --coverage-php /tmp/coverage/unit/phpunit.cov
 
       -   name: Install phpcov
+          if: ${{ !cancelled() }}
           run: |
               sudo apt-get install wget
               wget https://phar.phpunit.de/phpcov-10.0.1.phar -O phpcov.phar
 
       -   name: Generate coverage report
+          if: ${{ !cancelled() }}
           run: php phpcov.phar merge --clover /tmp/coverage/full.xml /tmp/coverage
 
       -   name: Upload tests coverage report
+          if: ${{ !cancelled() }}
           uses: codecov/codecov-action@v4
           with:
               fail_ci_if_error: true
