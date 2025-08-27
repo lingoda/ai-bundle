@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types=1);
+declare(strict_types = 1);
 
 namespace Lingoda\AiBundle\Command;
 
@@ -12,13 +12,10 @@ use Lingoda\AiSdk\Platform;
 use Lingoda\AiSdk\PlatformInterface;
 use Lingoda\AiSdk\Provider\OpenAIProvider;
 use Lingoda\AiSdk\ProviderInterface;
-use Lingoda\AiSdk\RateLimit\DelayInterface;
 use Lingoda\AiSdk\RateLimit\RateLimitedClient;
-use Lingoda\AiSdk\RateLimit\SystemDelay;
 use Lingoda\AiSdk\RateLimit\TokenEstimatorRegistry;
 use Lingoda\AiSdk\Result\ResultInterface;
 use Lingoda\AiSdk\Result\TextResult;
-use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -78,7 +75,8 @@ Example usage:
   # Distributed testing (run in multiple terminals)
   Terminal 1: php bin/console ai:test:rate-limiting --client-id=client1
   Terminal 2: php bin/console ai:test:rate-limiting --client-id=client2
-            ');
+            ')
+        ;
     }
 
     /**
@@ -150,10 +148,9 @@ Example usage:
                     
                     $retryInfo = $requestRetryAttempts > 0 ? " (after {$requestRetryAttempts} rate limit retries)" : '';
                     $rateLimitInfo = $requestHitRateLimit ? " <fg=yellow>[HIT RATE LIMIT]</fg=yellow>" : '';
-                    $io->writeln("<fg=green>✓ SUCCESS</fg=green> ({$duration}ms){$retryInfo}{$rateLimitInfo} - " . substr($contentStr, 0, 50) . '...');
+                    $io->writeln("<fg=green>✓ SUCCESS</fg=green> ({$duration}ms){$retryInfo}{$rateLimitInfo} - " . mb_substr($contentStr, 0, 50) . '...');
                     $successful++;
                     break;
-                    
                 } catch (RateLimitExceededException $e) {
                     $requestHitRateLimit = true;
                     $retryAfter = $e->getRetryAfter();
@@ -165,11 +162,10 @@ Example usage:
                         sleep($retryAfter);
                         $attempt++;
                         continue;
-                    } else {
-                        $io->writeln("<fg=red>✗ RATE LIMITED</fg=red> - Max retries reached (retry after {$retryAfter}s)");
-                        $permanentlyRateLimited++;
-                        break;
                     }
+                    $io->writeln("<fg=red>✗ RATE LIMITED</fg=red> - Max retries reached (retry after {$retryAfter}s)");
+                    $permanentlyRateLimited++;
+                    break;
                 } catch (\Exception $e) {
                     $io->writeln("<fg=yellow>⚠ ERROR</fg=yellow> - " . $e->getMessage());
                     break;
@@ -252,9 +248,8 @@ Example usage:
                 $duration = round(($endTime - $startTime) * 1000, 2);
                 $content = $result->getContent();
                 $contentStr = is_string($content) ? $content : 'Response received';
-                $io->writeln("<fg=green>✓ SUCCESS</fg=green> ({$duration}ms) - " . substr($contentStr, 0, 50) . '...');
+                $io->writeln("<fg=green>✓ SUCCESS</fg=green> ({$duration}ms) - " . mb_substr($contentStr, 0, 50) . '...');
                 $successful++;
-                
             } catch (RateLimitExceededException $e) {
                 $retryAfter = $e->getRetryAfter();
                 $io->writeln("<fg=red>✗ RATE LIMITED</fg=red> - Retry after {$retryAfter}s");
@@ -389,7 +384,6 @@ Example usage:
             $io->writeln("Using default model: {$model->getId()} from provider: {$provider->getId()}");
             
             return $model;
-
         } catch (\Exception $e) {
             $io->error("Failed to resolve model: " . $e->getMessage());
             $providers = $this->platform->getAvailableProviders();
@@ -417,7 +411,7 @@ Example usage:
         ], $storage, $lockFactory);
         
         $tokenLimiterFactory = new RateLimiterFactory([
-            'id' => 'test_tokens', 
+            'id' => 'test_tokens',
             'policy' => 'token_bucket',
             'limit' => 100000, // High token limit so it doesn't interfere
             'rate' => [

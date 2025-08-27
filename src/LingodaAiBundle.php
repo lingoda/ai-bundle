@@ -187,8 +187,8 @@ final class LingodaAiBundle extends AbstractBundle
         // Register logger reference if logging is enabled
         $loggerRef = null;
         if (isset($config['logging']) && is_array($config['logging']) && ($config['logging']['enabled'] ?? false)) {
-            $loggerService = !empty($config['logging']['service']) && is_string($config['logging']['service']) 
-                ? $config['logging']['service'] 
+            $loggerService = !empty($config['logging']['service']) && is_string($config['logging']['service'])
+                ? $config['logging']['service']
                 : 'logger'; // Default Symfony logger service
             $loggerRef = new Reference($loggerService);
         }
@@ -453,7 +453,7 @@ final class LingodaAiBundle extends AbstractBundle
 
     /**
      * Register rate limiting services based on configuration
-     * 
+     *
      * @param array<string, mixed> $rateLimitingConfig
      */
     private function registerRateLimiting(array $rateLimitingConfig, ContainerBuilder $builder): Reference
@@ -507,7 +507,6 @@ final class LingodaAiBundle extends AbstractBundle
                         $aliasId = sprintf('limiter.%s_%s', $providerId, $type);
                         $builder->setAlias($aliasId, $serviceId);
                         $builder->getAlias($aliasId)->setPublic(true);
-                        
                     } catch (\Exception $e) {
                         // Silently continue on registration failure
                     }
