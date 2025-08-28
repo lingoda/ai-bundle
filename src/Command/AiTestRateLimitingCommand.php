@@ -13,6 +13,7 @@ use Lingoda\AiSdk\PlatformInterface;
 use Lingoda\AiSdk\Provider\OpenAIProvider;
 use Lingoda\AiSdk\ProviderInterface;
 use Lingoda\AiSdk\RateLimit\RateLimitedClient;
+use Lingoda\AiSdk\RateLimit\RateLimiterInterface;
 use Lingoda\AiSdk\RateLimit\TokenEstimatorRegistry;
 use Lingoda\AiSdk\Result\ResultInterface;
 use Lingoda\AiSdk\Result\TextResult;
@@ -62,16 +63,16 @@ This command tests your actual rate limiting configuration by:
 Example usage:
   # Test with actual configuration
   php bin/console ai:test:rate-limiting
-  
+
   # Test with mock client (standalone)
   php bin/console ai:test:rate-limiting --use-mock
-  
+
   # Test without automatic retry (see raw rate limit errors)
   php bin/console ai:test:rate-limiting --no-retry
-  
+
   # Test specific provider
   php bin/console ai:test:rate-limiting --provider=openai
-  
+
   # Distributed testing (run in multiple terminals)
   Terminal 1: php bin/console ai:test:rate-limiting --client-id=client1
   Terminal 2: php bin/console ai:test:rate-limiting --client-id=client2
@@ -85,7 +86,7 @@ Example usage:
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        
+
         $requestsOption = $input->getOption('requests');
         $delayOption = $input->getOption('delay');
         $useMock = (bool) $input->getOption('use-mock');
@@ -93,12 +94,12 @@ Example usage:
         $clientId = is_string($input->getOption('client-id')) ? $input->getOption('client-id') : null;
         $modelOption = is_string($input->getOption('model')) ? $input->getOption('model') : null;
         $providerOption = is_string($input->getOption('provider')) ? $input->getOption('provider') : null;
-        
+
         $numRequests = is_numeric($requestsOption) ? (int) $requestsOption : 5;
         $delay = is_numeric($delayOption) ? (int) $delayOption : 100;
 
         $io->title('AI Bundle Rate Limiting Test');
-        
+
         if ($useMock) {
             return $this->executeMockTest($input, $output, $io, $numRequests, $delay);
         }
@@ -121,31 +122,31 @@ Example usage:
 
         $io->section('Making requests');
         $this->displayTestInfo($io, $numRequests, $delay, $noRetry, $clientId);
-        
+
         $successful = 0;
         $permanentlyRateLimited = 0;
         $hitRateLimit = 0;
         $totalRetryAttempts = 0;
-        
+
         for ($i = 1; $i <= $numRequests; $i++) {
             $clientIdStr = $clientId ?? 'unknown';
             $io->write("Request {$i}/{$numRequests} [Client: {$clientIdStr}]: ");
-            
+
             $maxRetries = $noRetry ? 0 : 3;
             $attempt = 0;
             $requestHitRateLimit = false;
             $requestRetryAttempts = 0;
-            
+
             while ($attempt <= $maxRetries) {
                 try {
                     $startTime = microtime(true);
                     $result = $this->platform->ask("Test request #{$i} from client {$clientIdStr} (attempt " . ($attempt + 1) . ")", $model->getId());
                     $endTime = microtime(true);
-                    
+
                     $duration = round(($endTime - $startTime) * 1000, 2);
                     $content = $result->getContent();
                     $contentStr = is_string($content) ? $content : 'Response received';
-                    
+
                     $retryInfo = $requestRetryAttempts > 0 ? " (after {$requestRetryAttempts} rate limit retries)" : '';
                     $rateLimitInfo = $requestHitRateLimit ? " <fg=yellow>[HIT RATE LIMIT]</fg=yellow>" : '';
                     $io->writeln("<fg=green>✓ SUCCESS</fg=green> ({$duration}ms){$retryInfo}{$rateLimitInfo} - " . mb_substr($contentStr, 0, 50) . '...');
@@ -154,7 +155,7 @@ Example usage:
                 } catch (RateLimitExceededException $e) {
                     $requestHitRateLimit = true;
                     $retryAfter = $e->getRetryAfter();
-                    
+
                     if ($attempt < $maxRetries) {
                         $requestRetryAttempts++;
                         $totalRetryAttempts++;
@@ -171,11 +172,11 @@ Example usage:
                     break;
                 }
             }
-            
+
             if ($requestHitRateLimit) {
                 $hitRateLimit++;
             }
-            
+
             // Add delay between requests if specified
             if ($delay > 0 && $i < $numRequests) {
                 usleep($delay * 1000); // Convert ms to microseconds
@@ -233,18 +234,18 @@ Example usage:
         $model = $client->getProvider()->getModel('gpt-4o-mini');
 
         $io->section('Making requests');
-        
+
         $successful = 0;
         $rateLimited = 0;
-        
+
         for ($i = 1; $i <= $numRequests; $i++) {
             $io->write("Request {$i}/{$numRequests}: ");
-            
+
             try {
                 $startTime = microtime(true);
                 $result = $platform->ask("Test request #{$i}", $model->getId());
                 $endTime = microtime(true);
-                
+
                 $duration = round(($endTime - $startTime) * 1000, 2);
                 $content = $result->getContent();
                 $contentStr = is_string($content) ? $content : 'Response received';
@@ -257,7 +258,7 @@ Example usage:
             } catch (\Exception $e) {
                 $io->writeln("<fg=yellow>⚠ ERROR</fg=yellow> - " . $e->getMessage());
             }
-            
+
             // Add delay between requests if specified
             if ($delay > 0 && $i < $numRequests) {
                 usleep($delay * 1000); // Convert ms to microseconds
@@ -295,19 +296,19 @@ Example usage:
 
         if ($this->platform !== null) {
             $providers = $this->platform->getAvailableProviders();
-            $io->definitionList(['Available providers' => implode(', ', $providers)]);
+            $io->definitionList(['Available providers' => $providers]);
         }
 
         if ($this->parameterBag !== null) {
             $rateLimitingEnabled = $this->parameterBag->get('lingoda_ai.rate_limiting.enabled');
             $io->definitionList(['Rate limiting enabled' => $rateLimitingEnabled ? 'Yes' : 'No']);
-            
+
             if ($rateLimitingEnabled) {
                 $storage = $this->parameterBag->get('lingoda_ai.rate_limiting.storage');
                 $lockFactory = $this->parameterBag->get('lingoda_ai.rate_limiting.lock_factory');
                 $enableRetries = $this->parameterBag->get('lingoda_ai.rate_limiting.enable_retries');
                 $maxRetries = $this->parameterBag->get('lingoda_ai.rate_limiting.max_retries');
-                
+
                 $io->definitionList(
                     ['Rate limit storage' => $storage ?? 'Default'],
                     ['Lock factory' => $lockFactory ?? 'Default'],
@@ -343,13 +344,12 @@ Example usage:
             return null;
         }
 
+        $providers = $this->platform->getAvailableProviders();
         try {
             if ($modelId !== null) {
                 // Specific model requested - find which provider supports it
-                $providers = $this->platform->getAvailableProviders();
-                foreach ($providers as $providerName) {
+                foreach ($providers as $provider) {
                     try {
-                        $provider = $this->platform->getProvider($providerName);
                         $model = $provider->getModel($modelId);
                         $io->writeln("Using specified model: {$model->getId()} from provider: {$provider->getId()}");
                         return $model;
@@ -361,9 +361,8 @@ Example usage:
                 throw new ModelNotFoundException("Model '{$modelId}' not found in any configured provider.");
             }
 
-            if ($providerId !== null) {
+            if ($providerId !== null && null !== $provider = $providers->get($providerId)) {
                 // Specific provider requested, use its default model
-                $provider = $this->platform->getProvider($providerId);
                 $defaultModel = $provider->getDefaultModel();
                 $model = $provider->getModel($defaultModel);
                 $io->writeln("Using default model: {$model->getId()} from specified provider: {$provider->getId()}");
@@ -371,23 +370,21 @@ Example usage:
             }
 
             // No specific model/provider requested, let Platform choose default
-            $providers = $this->platform->getAvailableProviders();
-            if (empty($providers)) {
+            if ($providers->isEmpty()) {
                 $io->error('No providers available.');
                 return null;
             }
 
-            $provider = $this->platform->getProvider($providers[0]);
+            $provider = $providers->getProviders()[0];
             $defaultModel = $provider->getDefaultModel();
             $model = $provider->getModel($defaultModel);
 
             $io->writeln("Using default model: {$model->getId()} from provider: {$provider->getId()}");
-            
+
             return $model;
         } catch (\Exception $e) {
             $io->error("Failed to resolve model: " . $e->getMessage());
-            $providers = $this->platform->getAvailableProviders();
-            $io->note('Available providers: ' . implode(', ', $providers));
+            $io->note('Available providers: ' . $providers);
             return null;
         }
     }
@@ -395,11 +392,11 @@ Example usage:
     private function createRateLimitedMockClient(int $requestsPerMinute, SymfonyStyle $io): ClientInterface
     {
         $io->writeln("Creating mock client with {$requestsPerMinute} requests/minute limit...");
-        
+
         // Create in-memory rate limiter with very low limits
         $storage = new InMemoryStorage();
         $lockFactory = new LockFactory(new InMemoryStore());
-        
+
         $requestLimiterFactory = new RateLimiterFactory([
             'id' => 'test_requests',
             'policy' => 'token_bucket',
@@ -409,7 +406,7 @@ Example usage:
                 'amount' => $requestsPerMinute,
             ],
         ], $storage, $lockFactory);
-        
+
         $tokenLimiterFactory = new RateLimiterFactory([
             'id' => 'test_tokens',
             'policy' => 'token_bucket',
@@ -422,13 +419,13 @@ Example usage:
 
         // Create rate limiter that uses our factories
         $rateLimiter = new TestRateLimiter($requestLimiterFactory, $tokenLimiterFactory);
-        
+
         // Create mock base client
         $baseClient = new MockClient();
-        
+
         // Create token estimator
         $tokenEstimator = TokenEstimatorRegistry::createDefault();
-        
+
         // Wrap in rate limited client
         $rateLimitedClient = new RateLimitedClient(
             $baseClient,
@@ -436,9 +433,9 @@ Example usage:
             $tokenEstimator,
             new NullLogger()
         );
-        
+
         $io->writeln('<fg=green>✓</fg=green> Rate-limited client created successfully');
-        
+
         return $rateLimitedClient;
     }
 }
@@ -446,7 +443,7 @@ Example usage:
 /**
  * Simple rate limiter implementation for testing
  */
-final class TestRateLimiter implements \Lingoda\AiSdk\RateLimit\RateLimiterInterface
+final class TestRateLimiter implements RateLimiterInterface
 {
     public function __construct(
         private readonly RateLimiterFactory $requestLimiterFactory,
@@ -459,7 +456,7 @@ final class TestRateLimiter implements \Lingoda\AiSdk\RateLimit\RateLimiterInter
         // Check request rate limit
         $requestLimiter = $this->requestLimiterFactory->create('test');
         $requestLimit = $requestLimiter->consume();
-        
+
         if (!$requestLimit->isAccepted()) {
             $retryAfter = $requestLimit->getRetryAfter()->getTimestamp() - time();
             throw new RateLimitExceededException($retryAfter, 'Request rate limit exceeded');
@@ -468,7 +465,7 @@ final class TestRateLimiter implements \Lingoda\AiSdk\RateLimit\RateLimiterInter
         // Check token rate limit
         $tokenLimiter = $this->tokenLimiterFactory->create('test');
         $tokenLimit = $tokenLimiter->consume($estimatedTokens);
-        
+
         if (!$tokenLimit->isAccepted()) {
             $retryAfter = $tokenLimit->getRetryAfter()->getTimestamp() - time();
             throw new RateLimitExceededException($retryAfter, 'Token rate limit exceeded');
@@ -489,15 +486,15 @@ final class TestRateLimiter implements \Lingoda\AiSdk\RateLimit\RateLimiterInter
     {
         $requestLimiter = $this->requestLimiterFactory->create('test');
         $tokenLimiter = $this->tokenLimiterFactory->create('test');
-        
+
         $requestReservation = $requestLimiter->reserve(1);
         $tokenReservation = $tokenLimiter->reserve(1);
-        
+
         $requestRetryAfter = $requestReservation->getWaitDuration();
         $tokenRetryAfter = $tokenReservation->getWaitDuration();
-        
+
         $maxRetryAfter = max($requestRetryAfter, $tokenRetryAfter);
-        
+
         return $maxRetryAfter > 0 ? (int)$maxRetryAfter : null;
     }
 }
@@ -524,7 +521,7 @@ final class MockClient implements ClientInterface
     {
         // Simulate processing delay
         usleep(50000); // 50ms delay to simulate API call
-        
+
         // Return mock response
         return new TextResult("Mock response for: " . (is_string($payload) ? $payload : json_encode($payload)));
     }

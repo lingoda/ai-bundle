@@ -1,5 +1,6 @@
 <?php
-declare(strict_types=1);
+
+declare(strict_types = 1);
 
 namespace Lingoda\AiBundle\Tests\Unit\Platform;
 
@@ -9,6 +10,7 @@ use Lingoda\AiSdk\ClientInterface;
 use Lingoda\AiSdk\Platform;
 use Lingoda\AiSdk\Prompt\Conversation;
 use Lingoda\AiSdk\Prompt\UserPrompt;
+use Lingoda\AiSdk\Provider\ProviderCollection;
 use Lingoda\AiSdk\ProviderInterface;
 use Lingoda\AiSdk\Result\BinaryResult;
 use Lingoda\AiSdk\Result\ResultInterface;
@@ -46,7 +48,7 @@ final class ProviderPlatformTest extends TestCase
         $this->mockStreamResult = $this->createMock(StreamResult::class);
         $this->mockTextResult = $this->createMock(TextResult::class);
         $this->mockAudioOptions = $this->createMock(AudioOptionsInterface::class);
-        
+
         // Create a ProviderPlatform with injected mock platform using reflection
         $this->providerPlatform = new ProviderPlatform($mockClient);
         $this->injectMockPlatform($this->providerPlatform, $this->mockPlatform);
@@ -54,15 +56,20 @@ final class ProviderPlatformTest extends TestCase
 
     public function testGetAvailableProvidersDelegatesToPlatform(): void
     {
-        $expectedProviders = ['openai', 'anthropic'];
-        
+        $mockProvider1 = $this->createMock(ProviderInterface::class);
+        $mockProvider1->method('getId')->willReturn('openai');
+        $mockProvider2 = $this->createMock(ProviderInterface::class);
+        $mockProvider2->method('getId')->willReturn('anthropic');
+        $expectedProviders = new ProviderCollection([$mockProvider1, $mockProvider2]);
+
         $this->mockPlatform
             ->expects(self::once())
             ->method('getAvailableProviders')
-            ->willReturn($expectedProviders);
-        
+            ->willReturn($expectedProviders)
+        ;
+
         $result = $this->providerPlatform->getAvailableProviders();
-        
+
         self::assertSame($expectedProviders, $result);
     }
 
@@ -72,10 +79,11 @@ final class ProviderPlatformTest extends TestCase
             ->expects(self::once())
             ->method('hasProvider')
             ->with('openai')
-            ->willReturn(true);
-        
+            ->willReturn(true)
+        ;
+
         $result = $this->providerPlatform->hasProvider('openai');
-        
+
         self::assertTrue($result);
     }
 
@@ -85,10 +93,11 @@ final class ProviderPlatformTest extends TestCase
             ->expects(self::once())
             ->method('hasProvider')
             ->with('nonexistent')
-            ->willReturn(false);
-        
+            ->willReturn(false)
+        ;
+
         $result = $this->providerPlatform->hasProvider('nonexistent');
-        
+
         self::assertFalse($result);
     }
 
@@ -98,10 +107,11 @@ final class ProviderPlatformTest extends TestCase
             ->expects(self::once())
             ->method('getProvider')
             ->with('openai')
-            ->willReturn($this->mockProvider);
-        
+            ->willReturn($this->mockProvider)
+        ;
+
         $result = $this->providerPlatform->getProvider('openai');
-        
+
         self::assertSame($this->mockProvider, $result);
     }
 
@@ -110,8 +120,9 @@ final class ProviderPlatformTest extends TestCase
         $this->mockPlatform
             ->expects(self::once())
             ->method('configureProviderDefaultModel')
-            ->with('openai', 'gpt-4o-mini');
-        
+            ->with('openai', 'gpt-4o-mini')
+        ;
+
         $this->providerPlatform->configureProviderDefaultModel('openai', 'gpt-4o-mini');
     }
 
@@ -121,25 +132,27 @@ final class ProviderPlatformTest extends TestCase
             ->expects(self::once())
             ->method('ask')
             ->with('test prompt', null, [])
-            ->willReturn($this->mockResult);
-        
+            ->willReturn($this->mockResult)
+        ;
+
         $result = $this->providerPlatform->ask('test prompt');
-        
+
         self::assertSame($this->mockResult, $result);
     }
 
     public function testAskWithPromptObjectDelegatesToPlatform(): void
     {
         $prompt = UserPrompt::create('test prompt content');
-        
+
         $this->mockPlatform
             ->expects(self::once())
             ->method('ask')
             ->with($prompt, null, [])
-            ->willReturn($this->mockResult);
-        
+            ->willReturn($this->mockResult)
+        ;
+
         $result = $this->providerPlatform->ask($prompt);
-        
+
         self::assertSame($this->mockResult, $result);
     }
 
@@ -147,30 +160,32 @@ final class ProviderPlatformTest extends TestCase
     {
         $userPrompt = UserPrompt::create('test conversation message');
         $conversation = new Conversation($userPrompt);
-        
+
         $this->mockPlatform
             ->expects(self::once())
             ->method('ask')
             ->with($conversation, null, [])
-            ->willReturn($this->mockResult);
-        
+            ->willReturn($this->mockResult)
+        ;
+
         $result = $this->providerPlatform->ask($conversation);
-        
+
         self::assertSame($this->mockResult, $result);
     }
 
     public function testAskWithModelAndOptionsDelegatesToPlatform(): void
     {
         $options = ['temperature' => 0.7];
-        
+
         $this->mockPlatform
             ->expects(self::once())
             ->method('ask')
             ->with('test prompt', 'gpt-4o-mini', $options)
-            ->willReturn($this->mockResult);
-        
+            ->willReturn($this->mockResult)
+        ;
+
         $result = $this->providerPlatform->ask('test prompt', 'gpt-4o-mini', $options);
-        
+
         self::assertSame($this->mockResult, $result);
     }
 
@@ -180,10 +195,11 @@ final class ProviderPlatformTest extends TestCase
             ->expects(self::once())
             ->method('textToSpeech')
             ->with('Hello world', $this->mockAudioOptions)
-            ->willReturn($this->mockBinaryResult);
-        
+            ->willReturn($this->mockBinaryResult)
+        ;
+
         $result = $this->providerPlatform->textToSpeech('Hello world', $this->mockAudioOptions);
-        
+
         self::assertSame($this->mockBinaryResult, $result);
     }
 
@@ -193,40 +209,43 @@ final class ProviderPlatformTest extends TestCase
             ->expects(self::once())
             ->method('textToSpeechStream')
             ->with('Hello world', $this->mockAudioOptions)
-            ->willReturn($this->mockStreamResult);
-        
+            ->willReturn($this->mockStreamResult)
+        ;
+
         $result = $this->providerPlatform->textToSpeechStream('Hello world', $this->mockAudioOptions);
-        
+
         self::assertSame($this->mockStreamResult, $result);
     }
 
     public function testTranscribeAudioDelegatesToPlatform(): void
     {
         $audioPath = '/path/to/audio.mp3';
-        
+
         $this->mockPlatform
             ->expects(self::once())
             ->method('transcribeAudio')
             ->with($audioPath, $this->mockAudioOptions)
-            ->willReturn($this->mockTextResult);
-        
+            ->willReturn($this->mockTextResult)
+        ;
+
         $result = $this->providerPlatform->transcribeAudio($audioPath, $this->mockAudioOptions);
-        
+
         self::assertSame($this->mockTextResult, $result);
     }
 
     public function testTranslateAudioDelegatesToPlatform(): void
     {
         $audioPath = '/path/to/audio.mp3';
-        
+
         $this->mockPlatform
             ->expects(self::once())
             ->method('translateAudio')
             ->with($audioPath, $this->mockAudioOptions)
-            ->willReturn($this->mockTextResult);
-        
+            ->willReturn($this->mockTextResult)
+        ;
+
         $result = $this->providerPlatform->translateAudio($audioPath, $this->mockAudioOptions);
-        
+
         self::assertSame($this->mockTextResult, $result);
     }
 

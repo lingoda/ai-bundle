@@ -27,35 +27,33 @@ final class AiTestConnectionCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        
+
         $io->title('Testing AI Provider Connections');
-        
+
         $providers = $this->platform->getAvailableProviders();
-        
-        if (empty($providers)) {
+        if ($providers->isEmpty()) {
             $io->warning('No AI providers configured');
             return Command::FAILURE;
         }
-        
+
         $allSuccessful = true;
-        
-        foreach ($providers as $providerName) {
+
+        foreach ($providers as $provider) {
+            $providerName = $provider->getName();
             $io->section("Testing {$providerName}");
-            
+
             try {
                 // Debug the platform instance
                 $io->text("  Platform class: " . get_class($this->platform));
-                
-                $provider = $this->platform->getProvider($providerName);
+
                 $defaultModel = $provider->getDefaultModel();
-                
                 $io->text("  Provider class: " . get_class($provider));
                 $io->text("  Default model: {$defaultModel}");
-                
+
                 // Test with a simple prompt using the provider's default model
                 $io->text("  Testing with model: {$defaultModel}");
                 $result = $this->platform->ask('Hello', $defaultModel);
-                
+
                 $io->success("✓ {$providerName} connection successful");
                 $io->text("  Default model: {$defaultModel}");
 
@@ -67,14 +65,14 @@ final class AiTestConnectionCommand extends Command
                 $allSuccessful = false;
                 $io->error("✗ {$providerName} connection failed");
                 $io->text("  Error: " . $e->getMessage());
-                
+
                 if ($output->isVerbose()) {
                     $io->text("  Exception: " . get_class($e));
                     $io->text("  File: " . $e->getFile() . ':' . $e->getLine());
                 }
             }
         }
-        
+
         if ($allSuccessful) {
             $io->success('All provider connections successful!');
 

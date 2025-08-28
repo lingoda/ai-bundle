@@ -14,6 +14,7 @@ use Lingoda\AiSdk\Platform;
 use Lingoda\AiSdk\PlatformInterface;
 use Lingoda\AiSdk\Prompt\Conversation;
 use Lingoda\AiSdk\Prompt\Prompt;
+use Lingoda\AiSdk\Provider\ProviderCollection;
 use Lingoda\AiSdk\ProviderInterface;
 use Lingoda\AiSdk\Result\BinaryResult;
 use Lingoda\AiSdk\Result\ResultInterface;
@@ -26,8 +27,8 @@ use Lingoda\AiSdk\Result\TextResult;
  */
 final readonly class ProviderPlatform implements PlatformInterface
 {
-    private Platform $platform;
-    
+    private PlatformInterface $platform;
+
     public function __construct(ClientInterface $client)
     {
         $this->platform = new Platform([$client]);
@@ -78,7 +79,7 @@ final readonly class ProviderPlatform implements PlatformInterface
         return $this->platform->getProvider($name);
     }
 
-    public function getAvailableProviders(): array
+    public function getAvailableProviders(): ProviderCollection
     {
         return $this->platform->getAvailableProviders();
     }

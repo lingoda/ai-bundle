@@ -1,10 +1,12 @@
 <?php
-declare(strict_types=1);
+
+declare(strict_types = 1);
 
 namespace Lingoda\AiBundle\Tests\Unit\Command;
 
 use Lingoda\AiBundle\Command\AiListProvidersCommand;
 use Lingoda\AiSdk\PlatformInterface;
+use Lingoda\AiSdk\Provider\ProviderCollection;
 use Lingoda\AiSdk\ProviderInterface;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -38,10 +40,11 @@ final class AiListProvidersCommandTest extends TestCase
         $this->platform
             ->expects($this->once())
             ->method('getAvailableProviders')
-            ->willReturn([]);
+            ->willReturn(new ProviderCollection([]))
+        ;
 
         $exitCode = $this->commandTester->execute([]);
-        
+
         self::assertSame(Command::SUCCESS, $exitCode);
         self::assertStringContainsString('No AI providers configured', $this->commandTester->getDisplay());
     }
@@ -49,32 +52,32 @@ final class AiListProvidersCommandTest extends TestCase
     public function testExecuteWithSingleProvider(): void
     {
         $mockProvider = $this->createMock(ProviderInterface::class);
+        $mockProvider->method('getId')->willReturn('openai');
         $mockProvider
             ->expects($this->once())
             ->method('getDefaultModel')
-            ->willReturn('gpt-4o-mini');
+            ->willReturn('gpt-4o-mini')
+        ;
         $mockProvider
             ->expects($this->once())
             ->method('getAvailableModels')
-            ->willReturn(['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo']);
+            ->willReturn(['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'])
+        ;
 
+        $providerCollection = new ProviderCollection([$mockProvider]);
         $this->platform
             ->expects($this->once())
             ->method('getAvailableProviders')
-            ->willReturn(['openai']);
-
-        $this->platform
-            ->expects($this->once())
-            ->method('getProvider')
-            ->with('openai')
-            ->willReturn($mockProvider);
+            ->willReturn($providerCollection)
+        ;
 
         $this->parameterBag
             ->expects($this->once())
             ->method('has')
             ->with('lingoda_ai.config')
-            ->willReturn(true);
-            
+            ->willReturn(true)
+        ;
+
         $this->parameterBag
             ->expects($this->once())
             ->method('get')
@@ -88,12 +91,13 @@ final class AiListProvidersCommandTest extends TestCase
                         'default_model' => 'gpt-4o-mini',
                     ],
                 ],
-            ]);
+            ])
+        ;
 
         $exitCode = $this->commandTester->execute([]);
-        
+
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('Configured AI Providers', $display);
         self::assertStringContainsString('openai', $display);
@@ -105,44 +109,45 @@ final class AiListProvidersCommandTest extends TestCase
     public function testExecuteWithMultipleProviders(): void
     {
         $openaiProvider = $this->createMock(ProviderInterface::class);
+        $openaiProvider->method('getId')->willReturn('openai');
         $openaiProvider
             ->expects($this->once())
             ->method('getDefaultModel')
-            ->willReturn('gpt-4o-mini');
+            ->willReturn('gpt-4o-mini')
+        ;
         $openaiProvider
             ->expects($this->once())
             ->method('getAvailableModels')
-            ->willReturn(['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo']);
+            ->willReturn(['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'])
+        ;
 
         $anthropicProvider = $this->createMock(ProviderInterface::class);
+        $anthropicProvider->method('getId')->willReturn('anthropic');
         $anthropicProvider
             ->expects($this->once())
             ->method('getDefaultModel')
-            ->willReturn('claude-3-5-haiku-20241022');
+            ->willReturn('claude-3-5-haiku-20241022')
+        ;
         $anthropicProvider
             ->expects($this->once())
             ->method('getAvailableModels')
-            ->willReturn(['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022']);
+            ->willReturn(['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022'])
+        ;
 
+        $providerCollection = new ProviderCollection([$openaiProvider, $anthropicProvider]);
         $this->platform
             ->expects($this->once())
             ->method('getAvailableProviders')
-            ->willReturn(['openai', 'anthropic']);
-
-        $this->platform
-            ->expects($this->exactly(2))
-            ->method('getProvider')
-            ->willReturnMap([
-                ['openai', $openaiProvider],
-                ['anthropic', $anthropicProvider],
-            ]);
+            ->willReturn($providerCollection)
+        ;
 
         $this->parameterBag
             ->expects($this->once())
             ->method('has')
             ->with('lingoda_ai.config')
-            ->willReturn(true);
-            
+            ->willReturn(true)
+        ;
+
         $this->parameterBag
             ->expects($this->once())
             ->method('get')
@@ -159,12 +164,13 @@ final class AiListProvidersCommandTest extends TestCase
                         'default_model' => 'claude-3-5-haiku-20241022',
                     ],
                 ],
-            ]);
+            ])
+        ;
 
         $exitCode = $this->commandTester->execute([]);
-        
+
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('openai', $display);
         self::assertStringContainsString('anthropic', $display);
@@ -173,27 +179,33 @@ final class AiListProvidersCommandTest extends TestCase
 
     public function testExecuteHandlesExceptionGracefully(): void
     {
+        $mockProvider = $this->createMock(ProviderInterface::class);
+        $mockProvider->method('getId')->willReturn('openai');
+        $mockProvider
+            ->expects($this->once())
+            ->method('getDefaultModel')
+            ->willThrowException(new \Exception('Connection failed'))
+        ;
+
+        $providerCollection = new ProviderCollection([$mockProvider]);
+
         $this->platform
             ->expects($this->once())
             ->method('getAvailableProviders')
-            ->willReturn(['openai']);
-            
-        $this->platform
-            ->expects($this->once())
-            ->method('getProvider')
-            ->with('openai')
-            ->willThrowException(new \Exception('Connection failed'));
-            
+            ->willReturn($providerCollection)
+        ;
+
         $this->parameterBag
             ->expects($this->once())
             ->method('has')
             ->with('lingoda_ai.config')
-            ->willReturn(false);
-            
+            ->willReturn(false)
+        ;
+
         $exitCode = $this->commandTester->execute([]);
-        
+
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('✗ Error', $display);
         self::assertStringContainsString('Connection failed', $display);
@@ -202,42 +214,43 @@ final class AiListProvidersCommandTest extends TestCase
     public function testExecuteWithProviderHavingNoModels(): void
     {
         $mockProvider = $this->createMock(ProviderInterface::class);
+        $mockProvider->method('getId')->willReturn('test_provider');
         $mockProvider
             ->expects($this->once())
             ->method('getDefaultModel')
-            ->willReturn('test-model');
+            ->willReturn('test-model')
+        ;
         $mockProvider
             ->expects($this->once())
             ->method('getAvailableModels')
-            ->willReturn([]); // No models available
+            ->willReturn([]) // No models available
+        ;
 
+        $providerCollection = new ProviderCollection([$mockProvider]);
         $this->platform
             ->expects($this->once())
             ->method('getAvailableProviders')
-            ->willReturn(['test_provider']);
-
-        $this->platform
-            ->expects($this->once())
-            ->method('getProvider')
-            ->with('test_provider')
-            ->willReturn($mockProvider);
+            ->willReturn($providerCollection)
+        ;
 
         $this->parameterBag
             ->expects($this->once())
             ->method('has')
             ->with('lingoda_ai.config')
-            ->willReturn(true);
-            
+            ->willReturn(true)
+        ;
+
         $this->parameterBag
             ->expects($this->once())
             ->method('get')
             ->with('lingoda_ai.config')
-            ->willReturn(['providers' => ['test_provider' => []]]);
-            
+            ->willReturn(['providers' => ['test_provider' => []]])
+        ;
+
         $exitCode = $this->commandTester->execute([]);
-        
+
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('0 models', $display);
     }
@@ -245,42 +258,43 @@ final class AiListProvidersCommandTest extends TestCase
     public function testExecuteWithProviderHavingManyModels(): void
     {
         $mockProvider = $this->createMock(ProviderInterface::class);
+        $mockProvider->method('getId')->willReturn('test_provider');
         $mockProvider
             ->expects($this->once())
             ->method('getDefaultModel')
-            ->willReturn('model1');
+            ->willReturn('model1')
+        ;
         $mockProvider
             ->expects($this->once())
             ->method('getAvailableModels')
-            ->willReturn(['model1', 'model2', 'model3', 'model4', 'model5']); // More than 3 models
+            ->willReturn(['model1', 'model2', 'model3', 'model4', 'model5']) // More than 3 models
+        ;
 
+        $providerCollection = new ProviderCollection([$mockProvider]);
         $this->platform
             ->expects($this->once())
             ->method('getAvailableProviders')
-            ->willReturn(['test_provider']);
-
-        $this->platform
-            ->expects($this->once())
-            ->method('getProvider')
-            ->with('test_provider')
-            ->willReturn($mockProvider);
+            ->willReturn($providerCollection)
+        ;
 
         $this->parameterBag
             ->expects($this->once())
             ->method('has')
             ->with('lingoda_ai.config')
-            ->willReturn(true);
-            
+            ->willReturn(true)
+        ;
+
         $this->parameterBag
             ->expects($this->once())
             ->method('get')
             ->with('lingoda_ai.config')
-            ->willReturn(['providers' => ['test_provider' => []]]);
-            
+            ->willReturn(['providers' => ['test_provider' => []]])
+        ;
+
         $exitCode = $this->commandTester->execute([]);
-        
+
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('(+2 more)', $display); // Should show truncation
     }
@@ -295,32 +309,32 @@ final class AiListProvidersCommandTest extends TestCase
     public function testExecuteWithCompleteConfiguration(): void
     {
         $mockProvider = $this->createMock(ProviderInterface::class);
+        $mockProvider->method('getId')->willReturn('openai');
         $mockProvider
             ->expects($this->once())
             ->method('getDefaultModel')
-            ->willReturn('gpt-4o-mini');
+            ->willReturn('gpt-4o-mini')
+        ;
         $mockProvider
             ->expects($this->once())
             ->method('getAvailableModels')
-            ->willReturn(['gpt-4o-mini']);
+            ->willReturn(['gpt-4o-mini'])
+        ;
 
+        $providerCollection = new ProviderCollection([$mockProvider]);
         $this->platform
             ->expects($this->once())
             ->method('getAvailableProviders')
-            ->willReturn(['openai']);
-
-        $this->platform
-            ->expects($this->once())
-            ->method('getProvider')
-            ->with('openai')
-            ->willReturn($mockProvider);
+            ->willReturn($providerCollection)
+        ;
 
         $this->parameterBag
             ->expects($this->once())
             ->method('has')
             ->with('lingoda_ai.config')
-            ->willReturn(true);
-            
+            ->willReturn(true)
+        ;
+
         $this->parameterBag
             ->expects($this->once())
             ->method('get')
@@ -335,12 +349,13 @@ final class AiListProvidersCommandTest extends TestCase
                     'enabled' => false,
                     'patterns' => []
                 ]
-            ]);
+            ])
+        ;
 
         $exitCode = $this->commandTester->execute([]);
-        
+
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringContainsString('Default provider: openai', $display);
         self::assertStringContainsString('Logging: enabled', $display);
@@ -350,32 +365,32 @@ final class AiListProvidersCommandTest extends TestCase
     public function testExecuteWithPartialConfiguration(): void
     {
         $mockProvider = $this->createMock(ProviderInterface::class);
+        $mockProvider->method('getId')->willReturn('openai');
         $mockProvider
             ->expects($this->once())
             ->method('getDefaultModel')
-            ->willReturn('gpt-4o-mini');
+            ->willReturn('gpt-4o-mini')
+        ;
         $mockProvider
             ->expects($this->once())
             ->method('getAvailableModels')
-            ->willReturn(['gpt-4o-mini']);
+            ->willReturn(['gpt-4o-mini'])
+        ;
 
+        $providerCollection = new ProviderCollection([$mockProvider]);
         $this->platform
             ->expects($this->once())
             ->method('getAvailableProviders')
-            ->willReturn(['openai']);
-
-        $this->platform
-            ->expects($this->once())
-            ->method('getProvider')
-            ->with('openai')
-            ->willReturn($mockProvider);
+            ->willReturn($providerCollection)
+        ;
 
         $this->parameterBag
             ->expects($this->once())
             ->method('has')
             ->with('lingoda_ai.config')
-            ->willReturn(true);
-            
+            ->willReturn(true)
+        ;
+
         $this->parameterBag
             ->expects($this->once())
             ->method('get')
@@ -385,12 +400,13 @@ final class AiListProvidersCommandTest extends TestCase
                     'enabled' => false
                 ]
                 // No default_provider or sanitization config
-            ]);
+            ])
+        ;
 
         $exitCode = $this->commandTester->execute([]);
-        
+
         self::assertSame(Command::SUCCESS, $exitCode);
-        
+
         $display = $this->commandTester->getDisplay();
         self::assertStringNotContainsString('Default provider:', $display);
         self::assertStringContainsString('Logging: disabled', $display);

@@ -9,6 +9,7 @@ use Lingoda\AiSdk\Exception\ModelNotFoundException;
 use Lingoda\AiSdk\Exception\RateLimitExceededException;
 use Lingoda\AiSdk\ModelInterface;
 use Lingoda\AiSdk\PlatformInterface;
+use Lingoda\AiSdk\Provider\ProviderCollection;
 use Lingoda\AiSdk\ProviderInterface;
 use Lingoda\AiSdk\Result\ResultInterface;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -53,7 +54,6 @@ final class AiTestRateLimitingCommandTest extends TestCase
         // Test that mock mode shows the correct configuration without actually running it
         // We'll use a command with null platform to trigger the check but capture output before execution
         $command = new AiTestRateLimitingCommand();
-        $commandTester = new CommandTester($command);
 
         // Instead of running the full command, just test that the option parsing works
         // This avoids the actual rate limiting execution
@@ -208,13 +208,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
         $mockProvider = $this->createMockProvider('claude-3-5-haiku-20241022', 'anthropic');
         $mockResult = $this->createMockResult('Anthropic response');
 
-        $this->platform
-            ->expects(self::once())
-            ->method('getProvider')
-            ->with('anthropic')
-            ->willReturn($mockProvider)
-        ;
-
+        $this->setupPlatformMocks(['anthropic'], $mockProvider);
         $this->setupParameterBagMocks(true);
 
         $this->platform
@@ -237,13 +231,16 @@ final class AiTestRateLimitingCommandTest extends TestCase
 
     public function testExecuteWithModelNotFound(): void
     {
-        $this->setupPlatformMocks(['openai'], null);
-        $this->setupParameterBagMocks(true);
-
-        $this->platform
-            ->method('getProvider')
-            ->willThrowException(new ModelNotFoundException('Model not found'))
+        $mockProvider = $this->createMock(ProviderInterface::class);
+        $mockProvider->method('getId')->willReturn('openai');
+        $mockProvider
+            ->method('getModel')
+            ->with('nonexistent-model')
+            ->willThrowException(new ModelNotFoundException("Model 'nonexistent-model' not found"))
         ;
+
+        $this->setupPlatformMocks(['openai'], $mockProvider);
+        $this->setupParameterBagMocks(true);
 
         $exitCode = $this->commandTester->execute([
             '--model' => 'nonexistent-model'
@@ -260,7 +257,7 @@ final class AiTestRateLimitingCommandTest extends TestCase
     {
         $this->platform
             ->method('getAvailableProviders')
-            ->willReturn([])
+            ->willReturn(new ProviderCollection([]))
         ;
 
         $this->setupParameterBagMocks(true);
@@ -623,17 +620,25 @@ final class AiTestRateLimitingCommandTest extends TestCase
         array $availableProviders,
         ?ProviderInterface $provider
     ): void {
-        $this->platform
-            ->method('getAvailableProviders')
-            ->willReturn($availableProviders)
-        ;
+        // Create provider collection
+        $providers = [];
 
         if ($provider !== null) {
-            $this->platform
-                ->method('getProvider')
-                ->willReturn($provider)
-            ;
+            // If a specific provider mock is provided, use it in the collection
+            $providers[] = $provider;
+        } else {
+            // Create basic mock providers from IDs
+            foreach ($availableProviders as $providerId) {
+                $mockProvider = $this->createMock(ProviderInterface::class);
+                $mockProvider->method('getId')->willReturn($providerId);
+                $providers[] = $mockProvider;
+            }
         }
+
+        $this->platform
+            ->method('getAvailableProviders')
+            ->willReturn(new ProviderCollection($providers))
+        ;
     }
 
     private function setupParameterBagMocks(bool $rateLimitingEnabled): void
@@ -652,23 +657,22 @@ final class AiTestRateLimitingCommandTest extends TestCase
 
     public function testResolveModelWithModelNotFoundInAnyProvider(): void
     {
-        $this->setupPlatformMocks(['openai', 'anthropic'], null);
-
         $provider1 = $this->createMockProvider('gpt-4o-mini', 'openai');
         $provider2 = $this->createMockProvider('claude-3-5-haiku-20241022', 'anthropic');
 
-        $this->platform
-            ->expects(self::exactly(2))
-            ->method('getProvider')
-            ->willReturnOnConsecutiveCalls($provider1, $provider2)
-        ;
-
         $provider1->method('getModel')
+            ->with('nonexistent-model')
             ->willThrowException(new ModelNotFoundException('Model not found'))
         ;
 
         $provider2->method('getModel')
+            ->with('nonexistent-model')
             ->willThrowException(new ModelNotFoundException('Model not found'))
+        ;
+
+        $this->platform
+            ->method('getAvailableProviders')
+            ->willReturn(new ProviderCollection([$provider1, $provider2]))
         ;
 
         $this->setupParameterBagMocks(true);
@@ -685,24 +689,29 @@ final class AiTestRateLimitingCommandTest extends TestCase
 
     public function testResolveModelWithProviderNotFound(): void
     {
-        $this->setupPlatformMocks(['openai'], null);
+        $mockProvider = $this->createMockProvider('gpt-4o-mini', 'openai');
+        $mockResult = $this->createMockResult('Test response');
+
+        $this->setupPlatformMocks(['openai'], $mockProvider);
         $this->setupParameterBagMocks(true);
 
         $this->platform
-            ->method('getProvider')
-            ->with('nonexistent')
-            ->willThrowException(new RuntimeException('Provider not found'))
+            ->expects(self::once())
+            ->method('ask')
+            ->willReturn($mockResult)
         ;
 
         $exitCode = $this->commandTester->execute([
-            '--provider' => 'nonexistent'
+            '--provider' => 'nonexistent',
+            '--requests' => '1',
+            '--delay' => '0'
         ]);
 
-        self::assertSame(Command::FAILURE, $exitCode);
+        // Since the requested provider doesn't exist, the command falls back to the first available provider
+        self::assertSame(Command::SUCCESS, $exitCode);
 
         $display = $this->commandTester->getDisplay();
-        self::assertStringContainsString('Failed to resolve model: Provider not found', $display);
-        self::assertStringContainsString('openai', $display);
+        self::assertStringContainsString('Using default model: gpt-4o-mini from provider: openai', $display);
     }
 
     public function testMockModeWithLowRequestsHighLimit(): void

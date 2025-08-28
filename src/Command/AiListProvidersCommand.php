@@ -29,12 +29,12 @@ final class AiListProvidersCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        
+
         $io->title('Configured AI Providers');
-        
+
         $providers = $this->platform->getAvailableProviders();
-        
-        if (empty($providers)) {
+
+        if ($providers->isEmpty()) {
             $io->warning('No AI providers configured');
             $io->note('Configure providers by setting API keys in your environment variables:');
             $io->listing([
@@ -44,24 +44,23 @@ final class AiListProvidersCommand extends Command
             ]);
             return Command::SUCCESS;
         }
-        
+
         // Get configuration if available
         /** @var array<string, mixed> $config */
         $config = $this->parameterBag->has('lingoda_ai.config')
             ? $this->parameterBag->get('lingoda_ai.config')
             : [];
-        
+
         $table = new Table($output);
         $table->setHeaders(['Provider', 'Status', 'Default Model', 'Available Models']);
-        
-        foreach ($providers as $providerName) {
+
+        foreach ($providers as $provider) {
             try {
-                $provider = $this->platform->getProvider($providerName);
                 $defaultModel = $provider->getDefaultModel();
                 $availableModels = $provider->getAvailableModels();
-                
+
                 $status = '✓ Available';
-                
+
                 $modelCount = count($availableModels);
                 if ($modelCount <= 3 && $modelCount > 0) {
                     $modelsText = implode(', ', $availableModels);
@@ -75,34 +74,34 @@ final class AiListProvidersCommand extends Command
                 $defaultModel = 'N/A';
                 $modelsText = $e->getMessage();
             }
-            
+
             $table->addRow([
-                $providerName,
+                $provider->getId(),
                 $status,
                 $defaultModel,
                 $modelsText
             ]);
         }
-        
+
         $table->render();
-        
+
         // Show default provider if configured
         if (isset($config['default_provider']) && is_string($config['default_provider'])) {
             $io->note("Default provider: {$config['default_provider']}");
         }
-        
+
         // Show logging status
         if (isset($config['logging']) && is_array($config['logging'])) {
             $loggingStatus = ($config['logging']['enabled'] ?? false) ? 'enabled' : 'disabled';
             $io->note("Logging: {$loggingStatus}");
         }
-        
+
         // Show sanitization status
         if (isset($config['sanitization']) && is_array($config['sanitization'])) {
             $sanitizationStatus = ($config['sanitization']['enabled'] ?? false) ? 'enabled' : 'disabled';
             $io->note("Data sanitization: {$sanitizationStatus}");
         }
-        
+
         return Command::SUCCESS;
     }
 }
