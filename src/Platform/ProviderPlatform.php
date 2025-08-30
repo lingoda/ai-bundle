@@ -10,6 +10,7 @@ use Lingoda\AiSdk\Exception\ClientException;
 use Lingoda\AiSdk\Exception\InvalidArgumentException;
 use Lingoda\AiSdk\Exception\ModelNotFoundException;
 use Lingoda\AiSdk\Exception\RuntimeException;
+use Lingoda\AiSdk\ModelInterface;
 use Lingoda\AiSdk\Platform;
 use Lingoda\AiSdk\PlatformInterface;
 use Lingoda\AiSdk\Prompt\Conversation;
@@ -82,6 +83,11 @@ final readonly class ProviderPlatform implements PlatformInterface
     public function getAvailableProviders(): ProviderCollection
     {
         return $this->platform->getAvailableProviders();
+    }
+
+    public function resolveModel(?string $modelId): ModelInterface
+    {
+        return $this->platform->resolveModel($modelId);
     }
 
     public function hasProvider(string $name): bool

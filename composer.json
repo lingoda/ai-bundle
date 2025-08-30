@@ -12,7 +12,7 @@
     ],
     "require": {
         "php": "^8.3",
-        "lingoda/ai-sdk": "^1.1",
+        "lingoda/ai-sdk": "^1.1.1",
         "symfony/config": "^6.4|^7.0",
         "symfony/console": "^6.4|^7.0",
         "symfony/dependency-injection": "^6.4|^7.0",
