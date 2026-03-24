@@ -1,7 +1,7 @@
 parameters:
 	ignoreErrors:
+		# Symfony config normalization closures work with mixed types by design
 		-
-			message: '#^Call to an undefined method Symfony\\Component\\Config\\Definition\\Builder\\NodeParentInterface\:\:arrayNode\(\)\.$#'
-			identifier: method.notFound
-			count: 1
+			identifier: offsetAccess.nonOffsetAccessible
 			path: src/LingodaAiBundle.php
+			count: 2

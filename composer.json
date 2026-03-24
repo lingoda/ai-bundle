@@ -13,13 +13,13 @@
     "require": {
         "php": "^8.3",
         "lingoda/ai-sdk": "^1.2",
-        "symfony/config": "^6.4|^7.0",
-        "symfony/console": "^6.4|^7.0",
-        "symfony/dependency-injection": "^6.4|^7.0",
-        "symfony/framework-bundle": "^6.4|^7.0",
-        "symfony/lock": "^6.4|^7.0",
-        "symfony/rate-limiter": "^6.4|^7.0",
-        "symfony/yaml": "^6.4|^7.0",
+        "symfony/config": "^6.4|^7.0|^8.0",
+        "symfony/console": "^6.4|^7.0|^8.0",
+        "symfony/dependency-injection": "^6.4|^7.0|^8.0",
+        "symfony/framework-bundle": "^6.4|^7.0|^8.0",
+        "symfony/lock": "^6.4|^7.0|^8.0",
+        "symfony/rate-limiter": "^6.4|^7.0|^8.0",
+        "symfony/yaml": "^6.4|^7.0|^8.0",
         "webmozart/assert": "^1.11"
     },
     "require-dev": {
@@ -31,7 +31,7 @@
         "phpstan/phpstan-phpunit": "^2.0",
         "phpstan/phpstan-webmozart-assert": "^2.0",
         "symplify/easy-coding-standard": "^12.0",
-        "symfony/phpunit-bridge": "^6.4|^7.0"
+        "symfony/phpunit-bridge": "^6.4|^7.0|^8.0"
     },
     "autoload": {
         "psr-4": {
@@ -51,7 +51,7 @@
     },
     "extra": {
         "symfony": {
-            "require": "^6.4|^7.0"
+            "require": "^6.4|^7.0|^8.0"
         }
     },
     "minimum-stability": "stable",
