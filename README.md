@@ -5,7 +5,7 @@ Symfony bundle for the [Lingoda AI SDK](https://github.com/lingoda/ai-sdk), prov
 ## Features
 
 - **🎯 Dual Platform Architecture**: Multi-provider Platform for flexibility + Single-provider platforms for simplicity
-- **🔌 Smart Autowiring**: Named parameter injection (`Platform $openaiPlatform`) 
+- **🔌 Smart Autowiring**: Named parameter injection (`Platform $openaiPlatform`)
 - **⚡ Simple ask() Method**: `$platform->ask('question')` for minimal code
 - **🛡️ Data Sanitization**: Built-in protection for sensitive information (inherited from AI SDK)
 - **🚦 Enhanced Rate Limiting**: Built-in Symfony-managed rate limiting (enabled by default)
@@ -35,7 +35,7 @@ Create `config/packages/lingoda_ai.yaml` and add your API keys to `.env`:
 
 ```env
 OPENAI_API_KEY=sk-your-openai-key
-ANTHROPIC_API_KEY=sk-ant-your-anthropic-key  
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-key
 GEMINI_API_KEY=your-gemini-key
 ```
 
@@ -51,7 +51,7 @@ lingoda_ai:
             api_key: '%env(OPENAI_API_KEY)%'
             default_model: 'gpt-4o-2024-11-20' # Override default model
             # Optional: Custom HTTP client with retry logic, timeouts, etc.
-            # http_client: 'openai.http_client' 
+            # http_client: 'openai.http_client'
             # timeout: 30 # Request timeout (only used if no custom http_client)
         anthropic:
             api_key: '%env(ANTHROPIC_API_KEY)%'
@@ -62,7 +62,7 @@ lingoda_ai:
         gemini:
             api_key: '%env(GEMINI_API_KEY)%'
             default_model: 'gemini-2.0-pro'
-            # Optional: Custom HTTP client for Gemini requests  
+            # Optional: Custom HTTP client for Gemini requests
             # http_client: 'gemini.http_client'
             # timeout: 30
     sanitization:
@@ -125,7 +125,7 @@ class MyService
     public function __construct(
         // Named parameter autowiring - the bundle automatically wires the right provider:
         private ProviderPlatform $openaiPlatform,      // Only OpenAI models
-        private ProviderPlatform $anthropicPlatform,   // Only Anthropic models  
+        private ProviderPlatform $anthropicPlatform,   // Only Anthropic models
         private PlatformInterface $geminiPlatform,     // Interface alias also works
     ) {}
 
@@ -134,16 +134,16 @@ class MyService
         // Only has access to OpenAI models
         return $this->openaiPlatform->ask($prompt)->getContent();
     }
-    
-    public function generateWithAnthropic(string $prompt): string  
+
+    public function generateWithAnthropic(string $prompt): string
     {
         // Only has access to Anthropic models
         return $this->anthropicPlatform->ask($prompt)->getContent();
     }
-    
+
     public function generateWithGemini(string $prompt): string
     {
-        // Only has access to Gemini models  
+        // Only has access to Gemini models
         return $this->geminiPlatform->ask($prompt)->getContent();
     }
 }
@@ -171,7 +171,7 @@ class AdvancedService
             'name' => 'Alice',
             'topic' => 'machine learning'
         ]);
-        
+
         return $this->platform->ask($prompt)->getContent();
     }
 
@@ -181,7 +181,7 @@ class AdvancedService
             SystemPrompt::create('You are a helpful coding assistant'),
             UserPrompt::create('How do I implement dependency injection?')
         );
-        
+
         return $this->platform->ask($conversation)->getContent();
     }
 
@@ -190,8 +190,8 @@ class AdvancedService
         // Text-to-Speech (requires OpenAI)
         $audioResult = $this->platform->textToSpeech('Hello world');
         file_put_contents('speech.mp3', $audioResult->getContent());
-        
-        // Speech-to-Text (requires OpenAI)  
+
+        // Speech-to-Text (requires OpenAI)
         $transcription = $this->platform->transcribeAudio('audio.mp3');
         echo $transcription->getContent();
     }
@@ -231,11 +231,11 @@ lingoda_ai:
     providers:
         openai:
             api_key: '%env(OPENAI_API_KEY)%'
-    
+
     rate_limiting:
         enabled: true  # Enable enhanced rate limiting
         storage: 'rate_limiter_pool'  # Use Redis for e.g. for shared state
-        
+
         providers:
             openai:
                 requests:
@@ -244,7 +244,7 @@ lingoda_ai:
                         interval: '1 minute'
                         amount: 180
                 tokens:
-                    limit: 450000  # Tokens per minute  
+                    limit: 450000  # Tokens per minute
                     rate:
                         interval: '1 minute'
                         amount: 450000
@@ -287,12 +287,12 @@ framework:
                     delay: 1000
                     multiplier: 2
                     http_codes:
-                        0: ['GET', 'POST'] # Network errors  
+                        0: ['GET', 'POST'] # Network errors
                         429: true # Rate limits
                         500: ['GET', 'POST'] # Server errors
                 headers:
                     'User-Agent': 'MyApp/1.0'
-            
+
             anthropic.http_client:
                 base_uri: 'https://api.anthropic.com'
                 timeout: 45
@@ -302,7 +302,7 @@ framework:
 ```
 
 ```yaml
-# config/packages/lingoda_ai.yaml  
+# config/packages/lingoda_ai.yaml
 lingoda_ai:
     providers:
         openai:
@@ -315,7 +315,7 @@ lingoda_ai:
 
 This gives you full control over:
 - **Retry strategies** for handling rate limits and network errors
-- **Custom timeouts** per provider based on your needs  
+- **Custom timeouts** per provider based on your needs
 - **Request/response headers** for debugging and user-agent identification
 - **Base URIs** if using proxy servers or custom endpoints
 
@@ -333,7 +333,7 @@ php bin/console ai:list:models
 # List models for a specific provider
 php bin/console ai:list:models --provider=openai
 
-# Detailed model information with availability status  
+# Detailed model information with availability status
 php bin/console ai:list:models --detailed
 
 # Test connections to all configured providers
@@ -351,7 +351,7 @@ php bin/console ai:test:rate-limiting --requests=10
 ### Code Quality
 
 ```bash
-# Install dependencies  
+# Install dependencies
 composer install
 
 # Run code style check
@@ -379,7 +379,7 @@ The bundle automatically registers these services based on your configured API k
 
 ### Multi-Provider Services
 - `lingoda_ai.platform` - Main Platform service with all configured providers
-- `Lingoda\AiSdk\Platform` - Alias to the main Platform service  
+- `Lingoda\AiSdk\Platform` - Alias to the main Platform service
 - `Lingoda\AiSdk\PlatformInterface` - Interface alias to the main Platform service
 
 ### Single-Provider Services
@@ -390,9 +390,9 @@ The bundle automatically registers these services based on your configured API k
 ### Autowiring Support
 ```php
 // These all work automatically:
-private Platform $platform;                           // Multi-provider
-private PlatformInterface $platform;                  // Multi-provider (interface)
-private ProviderPlatform $openaiPlatform;            // OpenAI only 
+private Platform $platform;                          // Multi-provider
+private PlatformInterface $platform;                 // Multi-provider (interface)
+private ProviderPlatform $openaiPlatform;            // OpenAI only
 private PlatformInterface $anthropicPlatform;        // Anthropic only (interface)
 private ProviderPlatform $geminiPlatform;            // Gemini only
 ```
@@ -400,7 +400,7 @@ private ProviderPlatform $geminiPlatform;            // Gemini only
 ## Architecture Benefits
 
 - **🎯 Dual Architecture**: Choose multi-provider flexibility OR single-provider simplicity
-- **📦 Simple Setup**: Straightforward configuration with environment variables  
+- **📦 Simple Setup**: Straightforward configuration with environment variables
 - **🔌 Smart Autowiring**: Named parameter injection automatically wires correct providers
 - **⚡ Full AI SDK Power**: Complete access to all AI SDK features and capabilities
 - **🛡️ Built-in Security**: Automatic data sanitization inherited from AI SDK
@@ -410,8 +410,8 @@ private ProviderPlatform $geminiPlatform;            // Gemini only
 
 The bundle supports all models and features from the [Lingoda AI SDK](https://github.com/lingoda/ai-sdk#-supported-models):
 
-**OpenAI Models**: GPT-5, GPT-4.1, GPT-4o series, Audio models (Whisper, TTS)  
-**Anthropic Models**: Claude 4.1, Claude 4.0, Claude 3.7, Claude 3.5 series  
+**OpenAI Models**: GPT-5, GPT-4.1, GPT-4o series, Audio models (Whisper, TTS)
+**Anthropic Models**: Claude 4.1, Claude 4.0, Claude 3.7, Claude 3.5 series
 **Google Models**: Gemini 2.5 Pro and Flash with 1M context
 
 **AI Capabilities**: Text generation, conversations, audio synthesis/transcription, parameterized prompts, streaming, vision, tools, reasoning, and more.
@@ -420,9 +420,9 @@ See the [AI SDK documentation](https://github.com/lingoda/ai-sdk/tree/main/docs)
 
 ## Getting Help
 
-- 📖 **AI SDK Docs**: [Complete documentation](https://github.com/lingoda/ai-sdk/tree/main/docs)  
+- 📖 **AI SDK Docs**: [Complete documentation](https://github.com/lingoda/ai-bundle/tree/main/docs)
 - 🐛 **Issues**: [Report bugs or request features](https://github.com/lingoda/ai-bundle/issues)
-- 💬 **Discussions**: [Community discussions](https://github.com/lingoda/ai-sdk/discussions)
+- 💬 **Discussions**: [Community discussions](https://github.com/lingoda/ai-bundle/discussions)
 
 ## License
 

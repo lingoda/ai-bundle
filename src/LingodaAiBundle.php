@@ -34,6 +34,7 @@ use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\CacheStorage;
+use Webmozart\Assert\Assert;
 
 final class LingodaAiBundle extends AbstractBundle
 {
@@ -183,7 +184,7 @@ final class LingodaAiBundle extends AbstractBundle
     public function loadExtension(array $config, ContainerConfigurator $container, ContainerBuilder $builder): void
     {
         $clients = [];
-        
+
         // Register logger reference if logging is enabled
         $loggerRef = null;
         if (isset($config['logging']) && is_array($config['logging']) && ($config['logging']['enabled'] ?? false)) {
@@ -192,27 +193,27 @@ final class LingodaAiBundle extends AbstractBundle
                 : 'logger'; // Default Symfony logger service
             $loggerRef = new Reference($loggerService);
         }
-        
+
         // Register rate limiting services if enabled
         $externalRateLimiterRef = null;
         if (isset($config['rate_limiting']) && is_array($config['rate_limiting']) && ($config['rate_limiting']['enabled'] ?? false)) {
             $externalRateLimiterRef = $this->registerRateLimiting($config['rate_limiting'], $builder);
         }
-        
+
         // Get rate limiting configuration for passing to providers
         $rateLimitingConfig = isset($config['rate_limiting']) && is_array($config['rate_limiting']) ? $config['rate_limiting'] : [];
-        
+
         // Register provider clients and platforms
         $this->registerProvider(AIProvider::OPENAI->value, OpenAIClient::class, $config, $builder, $clients, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig);
         $this->registerProvider(AIProvider::ANTHROPIC->value, AnthropicClient::class, $config, $builder, $clients, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig);
         $this->registerProvider(AIProvider::GEMINI->value, GeminiClient::class, $config, $builder, $clients, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig);
-        
+
         // Main Platform service
         if (!empty($clients)) {
             $sanitizationEnabled = isset($config['sanitization']) && is_array($config['sanitization'])
                 ? ($config['sanitization']['enabled'] ?? true)
                 : true;
-                
+
             $platformDef = new Definition(Platform::class, [
                 $clients,
                 $sanitizationEnabled,
@@ -222,36 +223,40 @@ final class LingodaAiBundle extends AbstractBundle
             ]);
             $platformDef->addTag('ai.platform', ['provider' => 'main', 'multi_provider' => true]);
             $platformDef->setPublic(true); // Make service public for testing
-            
+
             // Configure default models after platform creation
             $this->addDefaultModelConfiguration($platformDef, $config, $builder);
-            
+
             $builder->setDefinition('lingoda_ai.platform', $platformDef);
-            
+
             // Set up main platform aliases and autowiring
             $builder->setAlias(Platform::class, 'lingoda_ai.platform');
             $builder->setAlias(PlatformInterface::class, 'lingoda_ai.platform');
-            
+
             // If there's a default provider, also alias it
             if (!empty($config['default_provider']) && is_string($config['default_provider'])) {
                 $defaultProviderPlatformId = $config['default_provider'] . 'Platform';
                 $builder->setAlias('lingoda_ai.default_platform', $defaultProviderPlatformId);
             }
         }
-        
+
         // Store config as parameters for potential console commands
         $builder->setParameter('lingoda_ai.config', $config);
-        
+
         // Store rate limiting specific parameters for easier access
         if (isset($config['rate_limiting']) && is_array($config['rate_limiting'])) {
             $rateLimitingConfig = $config['rate_limiting'];
             $builder->setParameter('lingoda_ai.rate_limiting.enabled', (bool) ($rateLimitingConfig['enabled'] ?? true));
-            $builder->setParameter('lingoda_ai.rate_limiting.storage', (string) ($rateLimitingConfig['storage'] ?? 'cache.rate_limiter'));
-            $builder->setParameter('lingoda_ai.rate_limiting.lock_factory', (string) ($rateLimitingConfig['lock_factory'] ?? 'lock.factory'));
+            $storage = $rateLimitingConfig['storage'] ?? 'cache.rate_limiter';
+            Assert::string($storage);
+            $builder->setParameter('lingoda_ai.rate_limiting.storage', $storage);
+            $lockFactory = $rateLimitingConfig['lock_factory'] ?? 'lock.factory';
+            Assert::string($lockFactory);
+            $builder->setParameter('lingoda_ai.rate_limiting.lock_factory', $lockFactory);
             $builder->setParameter('lingoda_ai.rate_limiting.enable_retries', (bool) ($rateLimitingConfig['enable_retries'] ?? true));
             $builder->setParameter('lingoda_ai.rate_limiting.max_retries', is_numeric($rateLimitingConfig['max_retries'] ?? 10) ? (int) ($rateLimitingConfig['max_retries'] ?? 10) : 10);
         }
-        
+
         // Register console commands
         if (!empty($clients)) {
             $testCommandDef = new Definition(AiTestConnectionCommand::class, [
@@ -259,20 +264,20 @@ final class LingodaAiBundle extends AbstractBundle
             ]);
             $testCommandDef->addTag('console.command');
             $builder->setDefinition(AiTestConnectionCommand::class, $testCommandDef);
-            
+
             $listProvidersCommandDef = new Definition(AiListProvidersCommand::class, [
                 new Reference(PlatformInterface::class),
                 new Reference('parameter_bag')
             ]);
             $listProvidersCommandDef->addTag('console.command');
             $builder->setDefinition(AiListProvidersCommand::class, $listProvidersCommandDef);
-            
+
             $listModelsCommandDef = new Definition(AiListModelsCommand::class, [
                 new Reference(PlatformInterface::class)
             ]);
             $listModelsCommandDef->addTag('console.command');
             $builder->setDefinition(AiListModelsCommand::class, $listModelsCommandDef);
-            
+
             // Register rate limiting test command with Platform dependency
             $testRateLimitCommandDef = new Definition(AiTestRateLimitingCommand::class, [
                 new Reference(PlatformInterface::class),
@@ -324,50 +329,51 @@ final class LingodaAiBundle extends AbstractBundle
         if (!is_array($config['providers']) || !isset($config['providers'][$providerName]) || !is_array($config['providers'][$providerName])) {
             return;
         }
-        
+
         $providerConfig = $config['providers'][$providerName];
         if (empty($providerConfig['api_key']) || !is_string($providerConfig['api_key'])) {
             return;
         }
-        
+
         $factoryConfig = $this->getProviderFactoryConfig();
         if (!isset($factoryConfig[$providerName])) {
             return; // Unsupported provider
         }
-        
+
         $factoryClass = $factoryConfig[$providerName]['factory'];
-        
+
         // Build named arguments for factory method (Symfony DI requires $ prefix)
         $factoryArgs = ['$apiKey' => $providerConfig['api_key']];
-        
+
         // Add provider-specific arguments
         if ($providerName === AIProvider::OPENAI->value && !empty($providerConfig['organization'])) {
             $factoryArgs['$organization'] = $providerConfig['organization'];
         }
-        
+
         // Add timeout if specified
         $factoryArgs['$timeout'] = $providerConfig['timeout'];
-        
+
         // Add custom HTTP client if specified
         if (!empty($providerConfig['http_client'])) {
+            Assert::string($providerConfig['http_client']);
             $factoryArgs['$httpClient'] = new Reference($providerConfig['http_client']);
         }
-        
+
         // Add logger if configured
         if ($loggerRef !== null) {
             $factoryArgs['$logger'] = $loggerRef;
         }
-        
+
         // Register base client using factory with named arguments
         $baseClientDef = new Definition($clientClass);
         $baseClientDef->setFactory([$factoryClass, 'createClient']);
         $baseClientDef->setArguments($factoryArgs);
         $baseClientDef->addTag('ai.client', ['provider' => $providerName]);
         $baseClientDef->setPublic(true); // Make public for testing
-        
+
         $baseClientServiceId = "lingoda_ai.client.{$providerName}.base";
         $container->setDefinition($baseClientServiceId, $baseClientDef);
-        
+
         // If external rate limiter is available, wrap the client with RateLimitedClient
         $clientServiceId = "lingoda_ai.client.{$providerName}";
         if ($externalRateLimiterRef !== null) {
@@ -376,21 +382,21 @@ final class LingodaAiBundle extends AbstractBundle
                 $rateLimiterArgs['$logger'] = $loggerRef;
             }
             // lockFactory is null by default, so no need to specify it
-            
+
             $rateLimiterDef = new Definition(SymfonyRateLimiter::class, $rateLimiterArgs);
             $rateLimiterServiceId = "lingoda_ai.rate_limiter.{$providerName}";
             $rateLimiterDef->setPublic(true); // Make public for testing
             $container->setDefinition($rateLimiterServiceId, $rateLimiterDef);
-            
+
             $estimatorRegistryDef = new Definition(TokenEstimatorRegistry::class);
             $estimatorRegistryServiceId = "lingoda_ai.token_estimator_registry.{$providerName}";
             $estimatorRegistryDef->setPublic(true); // Make public for testing
             $container->setDefinition($estimatorRegistryServiceId, $estimatorRegistryDef);
-            
+
             // Get retry configuration
             $enableRetries = (bool) ($rateLimitingConfig['enable_retries'] ?? true);
             $maxRetries = is_numeric($rateLimitingConfig['max_retries'] ?? 10) ? (int) ($rateLimitingConfig['max_retries'] ?? 10) : 10;
-            
+
             $rateLimitedClientArgs = [
                 '$client' => new Reference($baseClientServiceId),
                 '$rateLimiter' => new Reference($rateLimiterServiceId),
@@ -402,7 +408,7 @@ final class LingodaAiBundle extends AbstractBundle
                 $rateLimitedClientArgs['$logger'] = $loggerRef;
             }
             // DelayInterface is null by default, so no need to specify it
-            
+
             $rateLimitedClientDef = new Definition(RateLimitedClient::class, $rateLimitedClientArgs);
             $rateLimitedClientDef->addTag('ai.client', ['provider' => $providerName, 'rate_limited' => true]);
             $rateLimitedClientDef->setPublic(true); // Make public for testing
@@ -412,16 +418,16 @@ final class LingodaAiBundle extends AbstractBundle
             $container->setAlias($clientServiceId, $baseClientServiceId);
             $container->getAlias($clientServiceId)->setPublic(true);
         }
-        
+
         $clients[] = new Reference($clientServiceId);
-        
-        
+
+
         // Register provider-specific platform (single provider)
         $providerPlatformDef = new Definition(ProviderPlatform::class, [new Reference($clientServiceId)]);
         $providerPlatformDef->addTag('ai.platform', ['provider' => $providerName]);
         $providerPlatformServiceId = $providerName . 'Platform';
         $container->setDefinition($providerPlatformServiceId, $providerPlatformDef);
-        
+
         // Set up autowiring for provider-specific platforms
         $container->setAlias(ProviderPlatform::class . ' $' . $providerPlatformServiceId, $providerPlatformServiceId);
         $container->setAlias(PlatformInterface::class . ' $' . $providerPlatformServiceId, $providerPlatformServiceId);
@@ -460,32 +466,32 @@ final class LingodaAiBundle extends AbstractBundle
     {
         // Register rate limiter factories for each provider and type
         $rateLimiterServiceMap = [];
-        
-        
+
+
         if (isset($rateLimitingConfig['providers']) && is_array($rateLimitingConfig['providers'])) {
             foreach ($rateLimitingConfig['providers'] as $providerId => $providerLimits) {
                 if (!is_array($providerLimits)) {
                     continue;
                 }
-                
+
                 foreach (['requests', 'tokens'] as $type) {
                     if (!isset($providerLimits[$type]) || !is_array($providerLimits[$type])) {
                         continue;
                     }
-                    
+
                     $limitConfig = $providerLimits[$type];
                     $serviceId = sprintf('lingoda_ai.rate_limiter.%s_%s', $providerId, $type);
-                    
+
                     try {
                         // Create storage adapter for rate limiter
                         $storageServiceId = is_string($rateLimitingConfig['storage'] ?? null) ? $rateLimitingConfig['storage'] : 'cache.rate_limiter';
                         $storageAdapterServiceId = sprintf('lingoda_ai.rate_limiter_storage.%s_%s', $providerId, $type);
-                        
+
                         $storageAdapterDef = new Definition(CacheStorage::class, [
                             new Reference($storageServiceId),
                         ]);
                         $builder->setDefinition($storageAdapterServiceId, $storageAdapterDef);
-                        
+
                         // Register the rate limiter factory
                         $rateLimiterDef = new Definition(RateLimiterFactory::class, [
                             [
@@ -497,12 +503,12 @@ final class LingodaAiBundle extends AbstractBundle
                             new Reference($storageAdapterServiceId),
                             new Reference(is_string($rateLimitingConfig['lock_factory'] ?? null) ? $rateLimitingConfig['lock_factory'] : 'lock.factory'),
                         ]);
-                        
+
                         // Make service public for testing
                         $rateLimiterDef->setPublic(true);
                         $builder->setDefinition($serviceId, $rateLimiterDef);
                         $rateLimiterServiceMap[$providerId][$type] = $serviceId;
-                        
+
                         // Also register with the standard Symfony naming convention for manual access
                         $aliasId = sprintf('limiter.%s_%s', $providerId, $type);
                         $builder->setAlias($aliasId, $serviceId);
@@ -513,16 +519,16 @@ final class LingodaAiBundle extends AbstractBundle
                 }
             }
         }
-        
+
         // Register the external rate limiter service
         $externalRateLimiterDef = new Definition(BundleExternalRateLimiter::class, [
             new Reference('service_container'),
             $rateLimiterServiceMap,
         ]);
         $externalRateLimiterDef->setPublic(true);
-        
+
         $builder->setDefinition('lingoda_ai.external_rate_limiter', $externalRateLimiterDef);
-        
+
         return new Reference('lingoda_ai.external_rate_limiter');
     }
 

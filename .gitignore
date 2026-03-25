@@ -14,7 +14,9 @@ Thumbs.db
 
 # Testing & Quality Tools
 /.coverage-cache/
+/coverage-report/
 /.phpstan-cache/
+/.phpunit.cache/
 /coverage/
 phpunit.xml
 .phpunit.result.cache
