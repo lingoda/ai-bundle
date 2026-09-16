@@ -6,10 +6,9 @@ namespace Lingoda\AiBundle\Tests\Integration;
 
 use Lingoda\AiBundle\LingodaAiBundle;
 use Lingoda\AiSdk\Platform;
+use Lingoda\AiSdk\RateLimit\RateLimitedClient;
 use Matthias\SymfonyDependencyInjectionTest\PhpUnit\AbstractExtensionTestCase;
 use Symfony\Component\DependencyInjection\Reference;
-use Symfony\Component\HttpClient\HttpClient;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Lingoda\AiBundle\Command\AiTestConnectionCommand;
 
 final class ServiceRegistrationTest extends AbstractExtensionTestCase
@@ -428,5 +427,48 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         self::assertSame($config['rate_limiting']['storage'], $storedConfig['rate_limiting']['storage']);
         self::assertSame($config['rate_limiting']['enable_retries'], $storedConfig['rate_limiting']['enable_retries']);
         self::assertSame($config['rate_limiting']['max_retries'], $storedConfig['rate_limiting']['max_retries']);
+    }
+
+    public function testDefaultModelIsConfiguredWhenRateLimitingIsDisabled(): void
+    {
+        $config = $this->getFullTestConfiguration();
+        $config['rate_limiting']['enabled'] = false;
+        $config['providers']['gemini']['default_model'] = 'gemini-3.1-flash-lite';
+
+        $this->load($config);
+
+        $this->assertContainerBuilderHasAlias('lingoda_ai.client.gemini', 'lingoda_ai.client.gemini.base');
+
+        $this->assertContainerBuilderHasServiceDefinitionWithMethodCall(
+            'lingoda_ai.platform',
+            'configureProviderDefaultModel',
+            ['openai', 'gpt-4o-mini']
+        );
+        $this->assertContainerBuilderHasServiceDefinitionWithMethodCall(
+            'lingoda_ai.platform',
+            'configureProviderDefaultModel',
+            ['anthropic', 'claude-3-5-haiku-20241022']
+        );
+        $this->assertContainerBuilderHasServiceDefinitionWithMethodCall(
+            'lingoda_ai.platform',
+            'configureProviderDefaultModel',
+            ['gemini', 'gemini-3.1-flash-lite']
+        );
+    }
+
+    public function testDefaultModelIsConfiguredWhenRateLimitingIsEnabled(): void
+    {
+        $config = $this->getFullTestConfiguration();
+        $config['providers']['gemini']['default_model'] = 'gemini-3.1-flash-lite';
+
+        $this->load($config);
+
+        $this->assertContainerBuilderHasService('lingoda_ai.client.gemini', RateLimitedClient::class);
+
+        $this->assertContainerBuilderHasServiceDefinitionWithMethodCall(
+            'lingoda_ai.platform',
+            'configureProviderDefaultModel',
+            ['gemini', 'gemini-3.1-flash-lite']
+        );
     }
 }

@@ -446,7 +446,7 @@ final class LingodaAiBundle extends AbstractBundle
         foreach ($config['providers'] as $providerName => $providerConfig) {
             if (is_array($providerConfig) && !empty($providerConfig['default_model']) && is_string($providerConfig['default_model'])) {
                 $clientServiceId = "lingoda_ai.client.{$providerName}";
-                if ($builder->hasDefinition($clientServiceId)) {
+                if ($builder->has($clientServiceId)) {
                     // Create a method call that will configure the provider's default model
                     $platformDef->addMethodCall('configureProviderDefaultModel', [
                         $providerName,
