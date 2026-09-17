@@ -1,0 +1,36 @@
+framework:
+    test: true
+    secret: 'test'
+    cache:
+        app: cache.adapter.array
+        pools:
+            rate_limiter_cache:
+                adapter: cache.adapter.array
+    lock:
+        flock: ~
+
+lingoda_ai:
+    providers:
+        gemini:
+            api_key: 'test-gemini-key'
+            default_model: 'gemini-3.1-flash-lite'
+    logging:
+        enabled: false
+    rate_limiting:
+        enabled: true  # Provider client is wrapped in RateLimitedClient (own definition) in this mode
+        storage: 'rate_limiter_cache'
+        lock_factory: 'lock.flock.factory'
+        providers:
+            gemini:
+                requests:
+                    policy: 'token_bucket'
+                    limit: 1000
+                    rate:
+                        interval: '1 minute'
+                        amount: 1000
+                tokens:
+                    policy: 'token_bucket'
+                    limit: 1000000
+                    rate:
+                        interval: '1 minute'
+                        amount: 1000000

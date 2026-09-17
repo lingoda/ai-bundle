@@ -1,7 +1,2 @@
 parameters:
-	ignoreErrors:
-		# Symfony config normalization closures work with mixed types by design
-		-
-			identifier: offsetAccess.nonOffsetAccessible
-			path: src/LingodaAiBundle.php
-			count: 2
+	ignoreErrors: []
