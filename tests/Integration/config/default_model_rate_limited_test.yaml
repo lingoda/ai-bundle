@@ -13,7 +13,7 @@ lingoda_ai:
     providers:
         gemini:
             api_key: 'test-gemini-key'
-            default_model: 'gemini-3.1-flash-lite'
+            default_model: 'gemini-2.5-pro'
     logging:
         enabled: false
     rate_limiting:

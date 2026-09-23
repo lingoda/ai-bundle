@@ -18,7 +18,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  */
 final class DefaultModelConfigurationTest extends KernelTestCase
 {
-    private const string CONFIGURED_DEFAULT_MODEL = 'gemini-3.1-flash-lite';
+    private const string CONFIGURED_DEFAULT_MODEL = 'gemini-2.5-pro';
 
     protected static function getKernelClass(): string
     {

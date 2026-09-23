@@ -1,15 +1,15 @@
 <?php
 
-declare(strict_types=1);
+declare(strict_types = 1);
 
 namespace Lingoda\AiBundle\Tests\Integration;
 
+use Lingoda\AiBundle\Command\AiTestConnectionCommand;
 use Lingoda\AiBundle\LingodaAiBundle;
 use Lingoda\AiSdk\Platform;
 use Lingoda\AiSdk\RateLimit\RateLimitedClient;
 use Matthias\SymfonyDependencyInjectionTest\PhpUnit\AbstractExtensionTestCase;
 use Symfony\Component\DependencyInjection\Reference;
-use Lingoda\AiBundle\Command\AiTestConnectionCommand;
 
 final class ServiceRegistrationTest extends AbstractExtensionTestCase
 {
@@ -23,7 +23,7 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         // Set required kernel parameters for AbstractBundle
         $this->container->setParameter('kernel.environment', 'test');
         $this->container->setParameter('kernel.debug', true);
@@ -124,25 +124,25 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         $this->load($this->getFullTestConfiguration());
 
         $platformDefinition = $this->container->getDefinition('lingoda_ai.platform');
-        
+
         // Check that the Platform service has the correct arguments
         $arguments = $platformDefinition->getArguments();
-        
+
         self::assertCount(5, $arguments);
-        
+
         // First argument should be array of client references
         self::assertIsArray($arguments[0]);
         self::assertNotEmpty($arguments[0]);
-        
+
         // Second argument should be sanitization enabled (true)
         self::assertTrue($arguments[1]);
-        
+
         // Third argument should be null (DataSanitizer created internally)
         self::assertNull($arguments[2]);
-        
+
         // Fourth argument should be logger reference
         self::assertInstanceOf(Reference::class, $arguments[3]);
-        
+
         // Fifth argument should be default provider
         self::assertSame('openai', $arguments[4]);
     }
@@ -151,12 +151,12 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
     {
         $config = $this->getFullTestConfiguration();
         $config['sanitization']['enabled'] = false;
-        
+
         $this->load($config);
 
         $platformDefinition = $this->container->getDefinition('lingoda_ai.platform');
         $arguments = $platformDefinition->getArguments();
-        
+
         // Second argument should be sanitization enabled (false)
         self::assertFalse($arguments[1]);
     }
@@ -165,12 +165,12 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
     {
         $config = $this->getFullTestConfiguration();
         $config['logging']['enabled'] = false;
-        
+
         $this->load($config);
 
         $platformDefinition = $this->container->getDefinition('lingoda_ai.platform');
         $arguments = $platformDefinition->getArguments();
-        
+
         // Fourth argument should be null when logging is disabled
         self::assertNull($arguments[3]);
     }
@@ -185,13 +185,13 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
             'ai.client',
             ['provider' => 'openai', 'rate_limited' => true]
         );
-        
+
         $this->assertContainerBuilderHasServiceDefinitionWithTag(
             'lingoda_ai.client.anthropic',
             'ai.client',
             ['provider' => 'anthropic', 'rate_limited' => true]
         );
-        
+
         $this->assertContainerBuilderHasServiceDefinitionWithTag(
             'lingoda_ai.client.gemini',
             'ai.client',
@@ -204,13 +204,13 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
             'ai.platform',
             ['provider' => 'openai']
         );
-        
+
         $this->assertContainerBuilderHasServiceDefinitionWithTag(
             'anthropicPlatform',
             'ai.platform',
             ['provider' => 'anthropic']
         );
-        
+
         $this->assertContainerBuilderHasServiceDefinitionWithTag(
             'geminiPlatform',
             'ai.platform',
@@ -233,7 +233,7 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         // Test OpenAI rate-limited client arguments: uses named arguments
         $openaiDefinition = $this->container->findDefinition('lingoda_ai.client.openai');
         $openaiArguments = $openaiDefinition->getArguments();
-        
+
         // Should have named arguments: $client, $rateLimiter, $estimatorRegistry, $enableRetries, $maxRetries, $logger
         self::assertArrayHasKey('$client', $openaiArguments);
         self::assertArrayHasKey('$rateLimiter', $openaiArguments);
@@ -241,7 +241,7 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         self::assertArrayHasKey('$enableRetries', $openaiArguments);
         self::assertArrayHasKey('$maxRetries', $openaiArguments);
         self::assertArrayHasKey('$logger', $openaiArguments);
-        
+
         self::assertInstanceOf(Reference::class, $openaiArguments['$client']); // base client reference
         self::assertInstanceOf(Reference::class, $openaiArguments['$rateLimiter']); // rate limiter reference
         self::assertInstanceOf(Reference::class, $openaiArguments['$estimatorRegistry']); // token estimator reference
@@ -252,7 +252,7 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         // Test that the base client has the correct API key arguments
         $baseOpenaiDefinition = $this->container->findDefinition('lingoda_ai.client.openai.base');
         $baseOpenaiArguments = $baseOpenaiDefinition->getArguments();
-        
+
         self::assertSame('test_openai_key', $baseOpenaiArguments['$apiKey']);
         self::assertSame('test_org', $baseOpenaiArguments['$organization']);
         self::assertSame(30, $baseOpenaiArguments['$timeout']);
@@ -261,14 +261,14 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         // Test Anthropic rate-limited client arguments
         $anthropicDefinition = $this->container->findDefinition('lingoda_ai.client.anthropic');
         $anthropicArguments = $anthropicDefinition->getArguments();
-        
+
         self::assertArrayHasKey('$client', $anthropicArguments);
         self::assertInstanceOf(Reference::class, $anthropicArguments['$client']); // base client reference
-        
+
         // Test that the base client has the correct API key arguments
         $baseAnthropicDefinition = $this->container->findDefinition('lingoda_ai.client.anthropic.base');
         $baseAnthropicArguments = $baseAnthropicDefinition->getArguments();
-        
+
         self::assertSame('test_anthropic_key', $baseAnthropicArguments['$apiKey']);
         self::assertSame(30, $baseAnthropicArguments['$timeout']);
         self::assertInstanceOf(Reference::class, $baseAnthropicArguments['$logger']);
@@ -276,14 +276,14 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         // Test Gemini rate-limited client arguments
         $geminiDefinition = $this->container->findDefinition('lingoda_ai.client.gemini');
         $geminiArguments = $geminiDefinition->getArguments();
-        
+
         self::assertArrayHasKey('$client', $geminiArguments);
         self::assertInstanceOf(Reference::class, $geminiArguments['$client']); // base client reference
-        
+
         // Test that the base client has the correct API key arguments
         $baseGeminiDefinition = $this->container->findDefinition('lingoda_ai.client.gemini.base');
         $baseGeminiArguments = $baseGeminiDefinition->getArguments();
-        
+
         self::assertSame('test_gemini_key', $baseGeminiArguments['$apiKey']);
         self::assertSame(30, $baseGeminiArguments['$timeout']);
         self::assertInstanceOf(Reference::class, $baseGeminiArguments['$logger']);
@@ -293,13 +293,13 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
     {
         $config = $this->getFullTestConfiguration();
         $config['providers']['openai']['organization'] = '';
-        
+
         $this->load($config);
 
         // With rate limiting enabled, check the base client arguments
         $baseOpenaiDefinition = $this->container->findDefinition('lingoda_ai.client.openai.base');
         $baseOpenaiArguments = $baseOpenaiDefinition->getArguments();
-        
+
         // Should have 3 arguments when organization is not provided: $apiKey, $timeout, $logger
         self::assertCount(3, $baseOpenaiArguments);
         self::assertSame('test_openai_key', $baseOpenaiArguments['$apiKey']);
@@ -318,10 +318,10 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
 
         // Platform should still be created with available clients
         $this->assertContainerBuilderHasService(Platform::class);
-        
+
         $platformDefinition = $this->container->getDefinition('lingoda_ai.platform');
         $clientsArgument = $platformDefinition->getArguments()[0];
-        
+
         // Should have only one client reference
         self::assertIsArray($clientsArgument);
         self::assertCount(1, $clientsArgument);
@@ -348,7 +348,7 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         // Check the base client arguments since rate limiting is enabled by default
         $baseOpenaiDefinition = $this->container->findDefinition('lingoda_ai.client.openai.base');
         $baseOpenaiArguments = $baseOpenaiDefinition->getArguments();
-        
+
         // Environment variables should be passed as-is to the base client
         self::assertSame('%env(OPENAI_API_KEY)%', $baseOpenaiArguments['$apiKey']);
         self::assertSame('%env(OPENAI_ORGANIZATION)%', $baseOpenaiArguments['$organization']);
@@ -359,17 +359,17 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         $config = $this->getFullTestConfiguration();
         $config['rate_limiting']['enable_retries'] = false;
         $config['rate_limiting']['max_retries'] = 5;
-        
+
         $this->load($config);
 
         // Test that the base client has the correct retry arguments
         $baseOpenaiDefinition = $this->container->findDefinition('lingoda_ai.client.openai.base');
         $baseOpenaiArguments = $baseOpenaiDefinition->getArguments();
-        
+
         // The rate-limited client wrapper should have the retry parameters
         $openaiDefinition = $this->container->findDefinition('lingoda_ai.client.openai');
         $openaiArguments = $openaiDefinition->getArguments();
-        
+
         // Should have named arguments with custom retry configuration
         self::assertArrayHasKey('$enableRetries', $openaiArguments);
         self::assertArrayHasKey('$maxRetries', $openaiArguments);
@@ -381,15 +381,15 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
     {
         $config = $this->getFullTestConfiguration();
         $config['rate_limiting']['enabled'] = false;
-        
+
         $this->load($config);
 
         // When rate limiting is disabled, clients should not be wrapped in RateLimitedClient
         $openaiDefinition = $this->container->findDefinition('lingoda_ai.client.openai');
-        
+
         // Should be the base client class, not RateLimitedClient
         self::assertStringContainsString('OpenAIClient', $openaiDefinition->getClass());
-        
+
         // Should have base client arguments only: $apiKey, $organization, $timeout, $logger
         $openaiArguments = $openaiDefinition->getArguments();
         self::assertCount(4, $openaiArguments);
@@ -405,23 +405,23 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         $this->load($config);
 
         $this->assertContainerBuilderHasParameter('lingoda_ai.config');
-        
+
         $storedConfig = $this->container->getParameter('lingoda_ai.config');
-        
+
         // Check essential configuration values are preserved (configuration gets normalized)
         self::assertSame($config['default_provider'], $storedConfig['default_provider']);
         self::assertSame($config['sanitization'], $storedConfig['sanitization']);
         self::assertSame($config['logging'], $storedConfig['logging']);
-        
+
         // Check providers are preserved with their essential values
         self::assertArrayHasKey('openai', $storedConfig['providers']);
         self::assertSame('test_openai_key', $storedConfig['providers']['openai']['api_key']);
         self::assertSame('test_org', $storedConfig['providers']['openai']['organization']);
         self::assertSame('gpt-4o-mini', $storedConfig['providers']['openai']['default_model']);
-        
+
         self::assertArrayHasKey('anthropic', $storedConfig['providers']);
         self::assertSame('test_anthropic_key', $storedConfig['providers']['anthropic']['api_key']);
-        
+
         // Check rate limiting configuration is preserved
         self::assertSame($config['rate_limiting']['enabled'], $storedConfig['rate_limiting']['enabled']);
         self::assertSame($config['rate_limiting']['storage'], $storedConfig['rate_limiting']['storage']);
@@ -433,7 +433,7 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
     {
         $config = $this->getFullTestConfiguration();
         $config['rate_limiting']['enabled'] = false;
-        $config['providers']['gemini']['default_model'] = 'gemini-3.1-flash-lite';
+        $config['providers']['gemini']['default_model'] = 'gemini-2.5-pro';
 
         $this->load($config);
 
@@ -452,14 +452,14 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         $this->assertContainerBuilderHasServiceDefinitionWithMethodCall(
             'lingoda_ai.platform',
             'configureProviderDefaultModel',
-            ['gemini', 'gemini-3.1-flash-lite']
+            ['gemini', 'gemini-2.5-pro']
         );
     }
 
     public function testDefaultModelIsConfiguredWhenRateLimitingIsEnabled(): void
     {
         $config = $this->getFullTestConfiguration();
-        $config['providers']['gemini']['default_model'] = 'gemini-3.1-flash-lite';
+        $config['providers']['gemini']['default_model'] = 'gemini-2.5-pro';
 
         $this->load($config);
 
@@ -468,7 +468,7 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         $this->assertContainerBuilderHasServiceDefinitionWithMethodCall(
             'lingoda_ai.platform',
             'configureProviderDefaultModel',
-            ['gemini', 'gemini-3.1-flash-lite']
+            ['gemini', 'gemini-2.5-pro']
         );
     }
 }

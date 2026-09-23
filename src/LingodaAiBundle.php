@@ -159,15 +159,13 @@ final class LingodaAiBundle extends AbstractBundle
                                         $result[$providerName] = $config;
                                         continue;
                                     }
-                                    $result[$providerName] = [];
+                                    $limits = [];
                                     foreach ($config as $type => $rateLimitConfig) {
-                                        if (!is_string($type) || !is_array($rateLimitConfig)) {
-                                            $result[$providerName][$type] = $rateLimitConfig;
-                                            continue;
-                                        }
-                                        $defaults = $this->getRateLimitDefaults($providerName, $type);
-                                        $result[$providerName][$type] = array_merge($defaults, $rateLimitConfig);
+                                        $limits[$type] = is_string($type) && is_array($rateLimitConfig)
+                                            ? array_merge($this->getRateLimitDefaults($providerName, $type), $rateLimitConfig)
+                                            : $rateLimitConfig;
                                     }
+                                    $result[$providerName] = $limits;
                                 }
                                 return $result;
                             })
