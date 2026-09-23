@@ -15,6 +15,9 @@
 - The rate-limited Bedrock client does not retry transport errors itself: async-aws already retries 429, 5xx and throttling.
 - `BundleExternalRateLimiter` reads the configured limiter factories from a service locator instead of the whole container; `getRateLimiter()` returns `RateLimiterFactoryInterface`.
 
+### Fixed
+- Provider platforms (`openaiPlatform`, `bedrockPlatform`, ...) now use the same sanitization (`enabled`, `patterns`), logger and `default_model` as the main platform. Before, they always ran the default sanitizer, and got their default model only if the main platform had been built first. `ProviderPlatform` takes the optional `$enableSanitization`, `$sanitizer` and `$logger` arguments of `Platform`.
+
 ### Upgrading from 1.x
 - `sanitization.patterns` is now applied: each pattern is redacted as `[REDACTED]` in prompt text, on top of the SDK defaults. In 1.x it was accepted but ignored, so review existing patterns before upgrading. An invalid regular expression now fails validation.
 - The `lingoda_ai.default_platform` alias is removed (it pointed at a missing service when the default provider was not registered). Inject `PlatformInterface`, or a provider platform such as `PlatformInterface $openaiPlatform`.

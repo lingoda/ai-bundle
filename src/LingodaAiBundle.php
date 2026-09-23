@@ -252,10 +252,18 @@ final class LingodaAiBundle extends AbstractBundle
                 ? ($config['sanitization']['enabled'] ?? true)
                 : true;
 
+            // One sanitizer for every platform when patterns are configured; null lets Platform build the default one
+            $sanitizerDef = $this->createSanitizerDefinition($config, $loggerRef);
+            $sanitizerRef = null;
+            if ($sanitizerDef !== null) {
+                $builder->setDefinition('lingoda_ai.data_sanitizer', $sanitizerDef);
+                $sanitizerRef = new Reference('lingoda_ai.data_sanitizer');
+            }
+
             $platformDef = new Definition(Platform::class, [
-                $clients,
+                array_values($clients),
                 $sanitizationEnabled,
-                $this->createSanitizerDefinition($config, $loggerRef), // null: Platform builds the default one
+                $sanitizerRef,
                 $loggerRef,
                 $config['default_provider'] ?? null
             ]);
@@ -270,6 +278,10 @@ final class LingodaAiBundle extends AbstractBundle
             // Set up main platform aliases and autowiring
             $builder->setAlias(Platform::class, 'lingoda_ai.platform');
             $builder->setAlias(PlatformInterface::class, 'lingoda_ai.platform');
+
+            foreach ($clients as $providerName => $clientRef) {
+                $this->registerProviderPlatform($providerName, $clientRef, (bool) $sanitizationEnabled, $sanitizerRef, $loggerRef, $config, $builder);
+            }
         }
 
         // Store config as parameters for potential console commands
@@ -345,7 +357,7 @@ final class LingodaAiBundle extends AbstractBundle
 
     /**
      * @param array<string, mixed> $config
-     * @param array<Reference> $clients
+     * @param array<string, Reference> $clients
      * @param array<string, mixed> $rateLimitingConfig
      */
     private function registerProvider(
@@ -409,7 +421,7 @@ final class LingodaAiBundle extends AbstractBundle
      * configured async-aws runtime client, whose own retries replace the rate limiter's transport retries.
      *
      * @param array<string, mixed> $config
-     * @param array<Reference> $clients
+     * @param array<string, Reference> $clients
      * @param array<string, mixed> $rateLimitingConfig
      */
     private function registerBedrock(
@@ -512,7 +524,7 @@ final class LingodaAiBundle extends AbstractBundle
     /**
      * Registers the base client, its optional rate-limited wrapper and the provider-specific platform.
      *
-     * @param array<Reference> $clients
+     * @param array<string, Reference> $clients
      * @param array<string, mixed> $rateLimitingConfig
      */
     private function registerClient(
@@ -551,12 +563,34 @@ final class LingodaAiBundle extends AbstractBundle
             $container->getAlias($clientServiceId)->setPublic(true);
         }
 
-        $clients[] = new Reference($clientServiceId);
+        $clients[$providerName] = new Reference($clientServiceId);
+    }
 
-
-        // Register provider-specific platform (single provider)
-        $providerPlatformDef = new Definition(ProviderPlatform::class, [new Reference($clientServiceId)]);
+    /**
+     * Registers the single-provider platform with the main platform's sanitization, logger and default model,
+     * so injecting e.g. PlatformInterface $openaiPlatform behaves like asking the main platform for that provider.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerProviderPlatform(
+        string $providerName,
+        Reference $clientRef,
+        bool $sanitizationEnabled,
+        ?Reference $sanitizerRef,
+        ?Reference $loggerRef,
+        array $config,
+        ContainerBuilder $container
+    ): void {
+        $providerPlatformDef = new Definition(ProviderPlatform::class, [$clientRef, $sanitizationEnabled, $sanitizerRef, $loggerRef]);
         $providerPlatformDef->addTag('ai.platform', ['provider' => $providerName]);
+
+        $providers = is_array($config['providers'] ?? null) ? $config['providers'] : [];
+        $providerConfig = is_array($providers[$providerName] ?? null) ? $providers[$providerName] : [];
+        $defaultModel = $providerConfig['default_model'] ?? null;
+        if (is_string($defaultModel) && $defaultModel !== '') {
+            $providerPlatformDef->addMethodCall('configureProviderDefaultModel', [$providerName, $defaultModel]);
+        }
+
         $providerPlatformServiceId = $providerName . 'Platform';
         $container->setDefinition($providerPlatformServiceId, $providerPlatformDef);
 

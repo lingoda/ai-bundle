@@ -5,6 +5,7 @@ declare(strict_types = 1);
 namespace Lingoda\AiBundle\Tests\Integration;
 
 use Lingoda\AiBundle\LingodaAiBundle;
+use Lingoda\AiBundle\Platform\ProviderPlatform;
 use Lingoda\AiBundle\RateLimit\BundleExternalRateLimiter;
 use Lingoda\AiSdk\Client\TypeSafe\TypeSafeDecisionPlatform;
 use Lingoda\AiSdk\Enum\AIProvider;
@@ -95,5 +96,16 @@ final class BedrockTypeSafeKernelTest extends KernelTestCase
             'Code [REDACTED] for [REDACTED_EMAIL]',
             $sanitizer->sanitize('Code voucher-4711 for jane@example.com')
         );
+    }
+
+    public function testProviderPlatformAppliesTheConfiguredDefaultModelOnItsOwn(): void
+    {
+        self::bootKernel();
+
+        // Only the provider platform is built: the main platform must not be needed for its default model
+        $bedrock = self::getContainer()->get('app.bedrock_platform');
+        self::assertInstanceOf(ProviderPlatform::class, $bedrock);
+
+        self::assertSame(ChatModel::CLAUDE_HAIKU_45->value, $bedrock->resolveModel(null)->getId());
     }
 }

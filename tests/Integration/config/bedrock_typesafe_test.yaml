@@ -9,6 +9,10 @@ framework:
         flock: ~
 
 services:
+    # Stands in for an app service injecting PlatformInterface $bedrockPlatform
+    app.bedrock_platform:
+        alias: bedrockPlatform
+        public: true
     app.bedrock_runtime:
         class: AsyncAws\BedrockRuntime\BedrockRuntimeClient
         arguments:

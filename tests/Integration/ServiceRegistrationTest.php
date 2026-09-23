@@ -151,10 +151,11 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         // Second argument should be sanitization enabled (true)
         self::assertTrue($arguments[1]);
 
-        // Third argument carries sanitization.patterns next to the SDK defaults
-        self::assertInstanceOf(Definition::class, $arguments[2]);
-        self::assertSame(DataSanitizer::class, $arguments[2]->getClass());
-        $registry = $arguments[2]->getArgument('$filter')->getArgument('$patternRegistry');
+        // Third argument is the shared sanitizer carrying sanitization.patterns next to the SDK defaults
+        self::assertEquals(new Reference('lingoda_ai.data_sanitizer'), $arguments[2]);
+        $sanitizer = $this->container->getDefinition('lingoda_ai.data_sanitizer');
+        self::assertSame(DataSanitizer::class, $sanitizer->getClass());
+        $registry = $sanitizer->getArgument('$filter')->getArgument('$patternRegistry');
         self::assertSame(PatternRegistry::class, $registry->getClass());
         self::assertSame(['/test_\d+/', '/sensitive-\w+/'], $registry->getArgument(2));
 
@@ -640,6 +641,33 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         self::assertSame(['openai' => ['requests' => 'lingoda_ai.rate_limiter.openai_requests']], $this->container->getDefinition('lingoda_ai.external_rate_limiter')->getArgument(1));
         self::assertFalse($this->container->getDefinition('lingoda_ai.rate_limiter.openai_requests')->isPublic());
         self::assertTrue($this->container->getAlias('limiter.openai_requests')->isPublic());
+    }
+
+    public function testProviderPlatformsShareTheMainPlatformSettings(): void
+    {
+        $this->load($this->getFullTestConfiguration());
+
+        foreach (['openai' => 'gpt-4o-mini', 'anthropic' => 'claude-3-5-haiku-20241022', 'gemini' => 'gemini-2.5-flash-002'] as $provider => $defaultModel) {
+            $definition = $this->container->getDefinition($provider . 'Platform');
+            self::assertEquals(
+                [new Reference('lingoda_ai.client.' . $provider), true, new Reference('lingoda_ai.data_sanitizer'), new Reference('logger')],
+                $definition->getArguments()
+            );
+            $this->assertContainerBuilderHasServiceDefinitionWithMethodCall($provider . 'Platform', 'configureProviderDefaultModel', [$provider, $defaultModel]);
+        }
+    }
+
+    public function testProviderPlatformsFollowDisabledSanitizationAndLogging(): void
+    {
+        $config = $this->getFullTestConfiguration();
+        $config['sanitization'] = ['enabled' => false, 'patterns' => []];
+        $config['logging']['enabled'] = false;
+        unset($config['providers']['openai']['default_model']);
+
+        $this->load($config);
+
+        self::assertSame([false, null, null], array_slice($this->container->getDefinition('openaiPlatform')->getArguments(), 1));
+        $this->assertContainerBuilderNotHasService('lingoda_ai.data_sanitizer');
     }
 
     public function testPlatformBuildsItsDefaultSanitizerWithoutPatterns(): void
