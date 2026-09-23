@@ -10,10 +10,12 @@ use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
+use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
+use Webmozart\Assert\Assert;
 
 /**
- * Bundle implementation of external rate limiter that provides rate limiters
- * configured via Symfony's rate_limiter configuration.
+ * Provides the rate limiter factories configured under lingoda_ai.rate_limiting.providers,
+ * from a service locator that holds only those factories.
  */
 final readonly class BundleExternalRateLimiter implements ExternalRateLimiterInterface
 {
@@ -29,17 +31,17 @@ final readonly class BundleExternalRateLimiter implements ExternalRateLimiterInt
     /**
      * @throws ContainerExceptionInterface|NotFoundExceptionInterface
      */
-    public function getRateLimiter(string $providerId, string $type, ModelInterface $model): RateLimiterFactory
+    public function getRateLimiter(string $providerId, string $type, ModelInterface $model): RateLimiterFactoryInterface
     {
         $serviceId = $this->getServiceId($providerId, $type);
-        
+
         if ($this->container->has($serviceId)) {
-            /** @var RateLimiterFactory $factory */
             $factory = $this->container->get($serviceId);
+            Assert::isInstanceOf($factory, RateLimiterFactory::class);
 
             return $factory;
         }
-        
+
         throw new \RuntimeException(sprintf(
             'Rate limiter service "%s" not found for provider "%s" and type "%s"',
             $serviceId,

@@ -6,10 +6,19 @@ namespace Lingoda\AiBundle\Tests\Integration;
 
 use Lingoda\AiBundle\Command\AiTestConnectionCommand;
 use Lingoda\AiBundle\LingodaAiBundle;
+use Lingoda\AiBundle\Platform\ProviderPlatform;
+use Lingoda\AiSdk\Client\Bedrock\BedrockClient;
+use Lingoda\AiSdk\Client\Bedrock\BedrockClientFactory;
+use Lingoda\AiSdk\Client\TypeSafe\TypeSafeDecisionPlatform;
+use Lingoda\AiSdk\Decision\DecisionPlatformInterface;
 use Lingoda\AiSdk\Platform;
+use Lingoda\AiSdk\PlatformInterface;
 use Lingoda\AiSdk\RateLimit\RateLimitedClient;
 use Matthias\SymfonyDependencyInjectionTest\PhpUnit\AbstractExtensionTestCase;
+use PHPUnit\Framework\Attributes\Group;
+use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\HttpClient\HttpClient;
 
 final class ServiceRegistrationTest extends AbstractExtensionTestCase
 {
@@ -59,7 +68,6 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
             ],
             'sanitization' => [
                 'enabled' => true,
-                'patterns' => ['/test_\d+/', '/sensitive-\w+/'],
             ],
             'logging' => [
                 'enabled' => true,
@@ -470,5 +478,127 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
             'configureProviderDefaultModel',
             ['gemini', 'gemini-2.5-pro']
         );
+    }
+
+    #[Group('bedrock')]
+    public function testBedrockIsRegisteredBehindTheRateLimiterWithoutTransportRetries(): void
+    {
+        $config = $this->getFullTestConfiguration();
+        $config['providers']['bedrock'] = ['runtime_client' => 'app.bedrock_runtime', 'default_model' => 'amazon.nova-2-lite-v1:0'];
+
+        $this->load($config);
+
+        $base = $this->container->getDefinition('lingoda_ai.client.bedrock.base');
+        self::assertSame(BedrockClient::class, $base->getClass());
+        self::assertSame([BedrockClientFactory::class, 'createClient'], $base->getFactory());
+        self::assertEquals(new Reference('app.bedrock_runtime'), $base->getArgument('$runtimeClient'));
+
+        $this->assertContainerBuilderHasService('lingoda_ai.client.bedrock', RateLimitedClient::class);
+        $this->assertContainerBuilderHasServiceDefinitionWithArgument('lingoda_ai.client.bedrock', '$retryTransportErrors', false);
+        $this->assertContainerBuilderHasServiceDefinitionWithArgument('lingoda_ai.client.openai', '$retryTransportErrors', true);
+
+        $this->assertContainerBuilderHasService('bedrockPlatform', ProviderPlatform::class);
+        $this->assertContainerBuilderHasAlias(PlatformInterface::class . ' $bedrockPlatform', 'bedrockPlatform');
+        self::assertContains('lingoda_ai.client.bedrock', array_map('strval', $this->container->getDefinition('lingoda_ai.platform')->getArgument(0)));
+        $this->assertContainerBuilderHasServiceDefinitionWithMethodCall(
+            'lingoda_ai.platform',
+            'configureProviderDefaultModel',
+            ['bedrock', 'amazon.nova-2-lite-v1:0']
+        );
+    }
+
+    #[Group('bedrock')]
+    public function testBedrockClientIsAnAliasWithoutRateLimiting(): void
+    {
+        $config = $this->getFullTestConfiguration();
+        $config['rate_limiting']['enabled'] = false;
+        $config['logging']['enabled'] = false;
+        $config['providers']['bedrock'] = ['runtime_client' => 'app.bedrock_runtime'];
+
+        $this->load($config);
+
+        $this->assertContainerBuilderHasAlias('lingoda_ai.client.bedrock', 'lingoda_ai.client.bedrock.base');
+        self::assertSame(['$runtimeClient'], array_keys($this->container->getDefinition('lingoda_ai.client.bedrock.base')->getArguments()));
+    }
+
+    public function testBedrockAndTypeSafeAreNotRegisteredUnlessConfigured(): void
+    {
+        $this->load($this->getFullTestConfiguration());
+
+        $this->assertContainerBuilderNotHasService('lingoda_ai.client.bedrock');
+        $this->assertContainerBuilderNotHasService('bedrockPlatform');
+        $this->assertContainerBuilderNotHasService('lingoda_ai.decision_platform.typesafe');
+        $this->assertContainerBuilderNotHasService(DecisionPlatformInterface::class);
+    }
+
+    public function testTypeSafeIsRegisteredAsADecisionPlatformOnly(): void
+    {
+        $config = $this->getFullTestConfiguration();
+        $config['providers']['typesafe'] = ['api_key' => 'ts-key', 'timeout' => 12];
+
+        $this->load($config);
+
+        $definition = $this->container->getDefinition('lingoda_ai.decision_platform.typesafe');
+        self::assertSame(TypeSafeDecisionPlatform::class, $definition->getClass());
+        self::assertSame('ts-key', $definition->getArgument('$apiKey'));
+        self::assertSame('jev-1.13.0', $definition->getArgument('$defaultModel'));
+        self::assertSame('https://api.typesafe.ai', $definition->getArgument('$baseUrl'));
+        self::assertEquals(new Reference('logger'), $definition->getArgument('$logger'));
+
+        $httpClient = $definition->getArgument('$httpClient');
+        self::assertInstanceOf(Definition::class, $httpClient);
+        self::assertSame([HttpClient::class, 'create'], $httpClient->getFactory());
+        self::assertSame([['timeout' => 12]], $httpClient->getArguments());
+
+        $this->assertContainerBuilderHasAlias(DecisionPlatformInterface::class, 'lingoda_ai.decision_platform.typesafe');
+        $this->assertContainerBuilderNotHasService('lingoda_ai.client.typesafe');
+        $this->assertContainerBuilderNotHasService('typesafePlatform');
+        self::assertNotContains('lingoda_ai.client.typesafe', array_map('strval', $this->container->getDefinition('lingoda_ai.platform')->getArgument(0)));
+    }
+
+    public function testTypeSafeUsesTheConfiguredHttpClientAndBaseUrl(): void
+    {
+        $config = $this->getFullTestConfiguration();
+        $config['logging']['enabled'] = false;
+        $config['providers']['typesafe'] = ['api_key' => 'ts-key', 'http_client' => 'app.http', 'base_url' => 'http://wiremock:8080', 'default_model' => 'jev-latest'];
+
+        $this->load($config);
+
+        $definition = $this->container->getDefinition('lingoda_ai.decision_platform.typesafe');
+        self::assertEquals(new Reference('app.http'), $definition->getArgument('$httpClient'));
+        self::assertSame('http://wiremock:8080', $definition->getArgument('$baseUrl'));
+        self::assertSame('jev-latest', $definition->getArgument('$defaultModel'));
+        self::assertArrayNotHasKey('$logger', $definition->getArguments());
+    }
+
+    public function testTypeSafeWithoutApiKeyIsNotRegistered(): void
+    {
+        $config = $this->getFullTestConfiguration();
+        $config['providers']['typesafe'] = ['api_key' => ''];
+
+        $this->load($config);
+
+        $this->assertContainerBuilderNotHasService('lingoda_ai.decision_platform.typesafe');
+    }
+
+    public function testNoDefaultPlatformAlias(): void
+    {
+        $this->load($this->getFullTestConfiguration());
+
+        self::assertFalse($this->container->has('lingoda_ai.default_platform'));
+    }
+
+    public function testExternalRateLimiterGetsALocatorOfPrivateLimiterFactories(): void
+    {
+        $config = $this->getFullTestConfiguration();
+        $config['rate_limiting']['providers'] = ['openai' => ['requests' => ['limit' => 10, 'rate' => ['interval' => '1 minute', 'amount' => 10]]]];
+
+        $this->load($config);
+
+        $locator = $this->container->getDefinition('lingoda_ai.external_rate_limiter')->getArgument(0);
+        self::assertInstanceOf(Reference::class, $locator);
+        self::assertSame(['openai' => ['requests' => 'lingoda_ai.rate_limiter.openai_requests']], $this->container->getDefinition('lingoda_ai.external_rate_limiter')->getArgument(1));
+        self::assertFalse($this->container->getDefinition('lingoda_ai.rate_limiter.openai_requests')->isPublic());
+        self::assertTrue($this->container->getAlias('limiter.openai_requests')->isPublic());
     }
 }

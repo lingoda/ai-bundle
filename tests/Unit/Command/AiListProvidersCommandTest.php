@@ -47,6 +47,7 @@ final class AiListProvidersCommandTest extends TestCase
 
         self::assertSame(Command::SUCCESS, $exitCode);
         self::assertStringContainsString('No AI providers configured', $this->commandTester->getDisplay());
+        self::assertStringContainsString('providers.bedrock.runtime_client', $this->commandTester->getDisplay());
     }
 
     public function testExecuteWithSingleProvider(): void
@@ -347,7 +348,6 @@ final class AiListProvidersCommandTest extends TestCase
                 ],
                 'sanitization' => [
                     'enabled' => false,
-                    'patterns' => []
                 ]
             ])
         ;

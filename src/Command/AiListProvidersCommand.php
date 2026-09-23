@@ -40,8 +40,10 @@ final class AiListProvidersCommand extends Command
             $io->listing([
                 'OPENAI_API_KEY=your-openai-key',
                 'ANTHROPIC_API_KEY=your-anthropic-key',
-                'GEMINI_API_KEY=your-gemini-key'
+                'GEMINI_API_KEY=your-gemini-key',
             ]);
+            $io->note('AWS Bedrock needs providers.bedrock.runtime_client instead of an API key.');
+
             return Command::SUCCESS;
         }
 

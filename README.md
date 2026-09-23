@@ -66,11 +66,65 @@ lingoda_ai:
             # http_client: 'gemini.http_client'
             # timeout: 30
     sanitization:
-        enabled: true # Auto-sanitize sensitive data
-        patterns: [] # Custom sanitization patterns
+        enabled: true # Auto-sanitize sensitive data in prompt text (attachments are sent as provided)
     logging:
         enabled: true
         service: 'monolog.logger' # Logger service ID
+```
+
+### AWS Bedrock (Nova and Claude)
+
+Bedrock needs `symfony/ai-bedrock-platform` (~0.13.0) and `async-aws/bedrock-runtime`. It has no API key: region and credentials come from an async-aws `BedrockRuntimeClient` service, for example the one the async-aws bundle registers.
+
+```bash
+composer require symfony/ai-bedrock-platform:~0.13.0 async-aws/bedrock-runtime
+```
+
+```yaml
+# config/packages/async_aws.yaml
+async_aws:
+    clients:
+        bedrock_runtime: ~ # region eu-west-1 (or another eu-/us- region), async-aws retries on
+
+# config/packages/lingoda_ai.yaml
+lingoda_ai:
+    providers:
+        bedrock: # opt-in: absent means not registered
+            runtime_client: 'async_aws.client.bedrock_runtime'
+            default_model: 'amazon.nova-2-lite-v1:0'
+```
+
+- Model ids are the Bedrock base ids (`amazon.nova-2-lite-v1:0`, `anthropic.claude-haiku-4-5-20251001-v1:0`, ...); the SDK prefixes the region's inference profile (`eu.`/`us.`) and refuses any other region.
+- `http_client`, `api_key` and `organization` are rejected: an injected HTTP client would drop the async-aws retries (429, 5xx, throttling).
+- Retries happen once, in async-aws: the rate-limited Bedrock client does not retry transport errors itself, only rate-limit waits.
+- Configuring `bedrock` without the two packages fails at container build with the `composer require` command.
+- Attachments (PDF, DOCX on Nova, images, text formats) work through `Conversation::withAttachments()`; see the [AI SDK README](https://github.com/lingoda/ai-sdk#documents-and-images) for the per-model format matrix.
+
+### TypeSafe Jev (decisions)
+
+Jev answers structured questions about a text state. It is registered as `Lingoda\AiSdk\Decision\DecisionPlatformInterface`, never on the main platform, so `ask()` cannot route to it and `default_provider: typesafe` is rejected.
+
+```yaml
+lingoda_ai:
+    providers:
+        typesafe: # registered only when api_key is set
+            api_key: '%env(TYPESAFE_API_KEY)%'
+            default_model: 'jev-1.13.0' # default; jev-latest and jev-preview also exist
+            # base_url: 'https://api.typesafe.ai'
+            # http_client: 'typesafe.http_client' # or timeout: 30
+```
+
+```php
+use Lingoda\AiSdk\Decision\DecisionPlatformInterface;
+use Lingoda\AiSdk\Decision\Question;
+
+public function __construct(private DecisionPlatformInterface $decisions) {}
+
+$result = $this->decisions->decide('Teacher log text', [
+    'on_topic' => Question::noul('Is the log about the lesson?'),
+    'mood' => Question::choice('Learner mood?', ['happy' => 'Positive', 'neutral' => 'Neutral', 'upset' => 'Negative']),
+]);
+$result->getAnswer('on_topic')->isTrue();
 ```
 
 ### 3. Usage
@@ -369,9 +423,10 @@ vendor/bin/phpunit
 
 ### Requirements
 
-- PHP ^8.3
-- Symfony ^6.4|^7.0
-- lingoda/ai-sdk
+- PHP ^8.4
+- Symfony ^7.4|^8.0
+- lingoda/ai-sdk ^2.0
+- For Bedrock: symfony/ai-bedrock-platform ~0.13.0 and async-aws/bedrock-runtime
 
 ## Available Services
 
@@ -386,6 +441,11 @@ The bundle automatically registers these services based on your configured API k
 - `openaiPlatform` - OpenAI-only platform (if `OPENAI_API_KEY` configured)
 - `anthropicPlatform` - Anthropic-only platform (if `ANTHROPIC_API_KEY` configured)
 - `geminiPlatform` - Gemini-only platform (if `GEMINI_API_KEY` configured)
+- `bedrockPlatform` - Bedrock-only platform (if `providers.bedrock` configured)
+
+### Decision Services
+- `lingoda_ai.decision_platform.typesafe` - TypeSafe Jev (if `providers.typesafe.api_key` configured)
+- `Lingoda\AiSdk\Decision\DecisionPlatformInterface` - alias to it
 
 ### Autowiring Support
 ```php
@@ -413,6 +473,8 @@ The bundle supports all models and features from the [Lingoda AI SDK](https://gi
 **OpenAI Models**: GPT-5, GPT-4.1, GPT-4o series, Audio models (Whisper, TTS)
 **Anthropic Models**: Claude 4.1, Claude 4.0, Claude 3.7, Claude 3.5 series
 **Google Models**: Gemini 2.5 Pro and Flash with 1M context
+**AWS Bedrock (EU/US inference profiles)**: Amazon Nova Micro, Lite, Pro, 2 Lite; Claude Haiku 4.5 up to Opus 5.5
+**TypeSafe Jev**: `jev-1.13.0`, `jev-latest`, `jev-preview` (decisions, via `DecisionPlatformInterface`)
 
 **AI Capabilities**: Text generation, conversations, audio synthesis/transcription, parameterized prompts, streaming, vision, tools, reasoning, and more.
 

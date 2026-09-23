@@ -53,7 +53,7 @@ final class AiTestRateLimitingCommand extends Command
             ->addOption('no-retry', null, InputOption::VALUE_NONE, 'Disable automatic retry on rate limit')
             ->addOption('client-id', 'c', InputOption::VALUE_OPTIONAL, 'Client identifier for distributed testing', 'cli-test')
             ->addOption('model', null, InputOption::VALUE_OPTIONAL, 'Model to use for testing', null)
-            ->addOption('provider', null, InputOption::VALUE_OPTIONAL, 'Provider to test (openai, anthropic, gemini)', null)
+            ->addOption('provider', null, InputOption::VALUE_OPTIONAL, 'Provider to test (openai, anthropic, gemini, bedrock)', null)
             ->setHelp('
 This command tests your actual rate limiting configuration by:
 1. Using your configured Platform service with real rate limits

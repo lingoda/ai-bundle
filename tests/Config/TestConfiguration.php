@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types=1);
+declare(strict_types = 1);
 
 namespace Lingoda\AiBundle\Tests\Config;
 
@@ -40,11 +40,6 @@ final class TestConfiguration
             ],
             'sanitization' => [
                 'enabled' => true,
-                'patterns' => [
-                    '/test_\d+/',
-                    '/sensitive-\w+/',
-                    '/api[-_]key[-_]\w+/i',
-                ],
             ],
             'logging' => [
                 'enabled' => true,

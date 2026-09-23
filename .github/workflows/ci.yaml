@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        php: ['8.3', '8.4']
-        symfony: ['6.4', '7.3', '8.0']
+        php: ['8.4', '8.5']
+        symfony: ['7.4', '8.0']
       fail-fast: false
     steps:
       -   name: cancel
@@ -74,3 +74,22 @@ jobs:
               fail_ci_if_error: true
               token: ${{ secrets.CODECOV_TOKEN }}
               files: /tmp/coverage/full.xml
+
+  tests-without-bedrock:
+    runs-on: ubuntu-latest
+    steps:
+      -   name: checkout
+          uses: actions/checkout@v4
+
+      -   name: Setup PHP
+          uses: shivammathur/setup-php@2.30.4
+          with:
+              php-version: '8.4'
+
+      -   name: Install without the Bedrock packages
+          run: |
+            composer remove --dev --no-update symfony/ai-bedrock-platform async-aws/bedrock-runtime
+            composer update --prefer-dist --no-scripts --no-interaction
+
+      -   name: Run unit tests except the Bedrock group
+          run: vendor/bin/phpunit --exclude-group bedrock
