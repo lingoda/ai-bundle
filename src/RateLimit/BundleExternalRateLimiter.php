@@ -9,7 +9,6 @@ use Lingoda\AiSdk\RateLimit\ExternalRateLimiterInterface;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
-use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Webmozart\Assert\Assert;
 
@@ -37,7 +36,7 @@ final readonly class BundleExternalRateLimiter implements ExternalRateLimiterInt
 
         if ($serviceId !== null && $this->container->has($serviceId)) {
             $factory = $this->container->get($serviceId);
-            Assert::isInstanceOf($factory, RateLimiterFactory::class);
+            Assert::isInstanceOf($factory, RateLimiterFactoryInterface::class);
 
             return $factory;
         }
