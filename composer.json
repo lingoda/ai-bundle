@@ -12,7 +12,7 @@
     ],
     "require": {
         "php": "^8.4",
-        "lingoda/ai-sdk": "dev-MNR-06_ai_sdk_attachments_bedrock as 2.0.0",
+        "lingoda/ai-sdk": "^2.0",
         "symfony/config": "^7.4|^8.0",
         "symfony/console": "^7.4|^8.0",
         "symfony/dependency-injection": "^7.4|^8.0",
@@ -39,12 +39,6 @@
         "async-aws/bedrock-runtime": "Required for the AWS Bedrock provider",
         "symfony/ai-bedrock-platform": "Required for the AWS Bedrock provider (~0.13.0)"
     },
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/lingoda/ai-sdk.git"
-        }
-    ],
     "autoload": {
         "psr-4": {
             "Lingoda\\AiBundle\\": "src/"
