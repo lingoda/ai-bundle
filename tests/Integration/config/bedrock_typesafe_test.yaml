@@ -23,6 +23,8 @@ lingoda_ai:
         typesafe:
             api_key: 'test-typesafe-key'
             default_model: 'jev-latest'
+    sanitization:
+        patterns: ['/voucher-\d{4}/']
     logging:
         enabled: false
     rate_limiting:

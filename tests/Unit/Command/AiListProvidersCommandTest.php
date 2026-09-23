@@ -348,6 +348,7 @@ final class AiListProvidersCommandTest extends TestCase
                 ],
                 'sanitization' => [
                     'enabled' => false,
+                    'patterns' => [],
                 ]
             ])
         ;

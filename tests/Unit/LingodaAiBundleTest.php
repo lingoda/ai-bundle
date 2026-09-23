@@ -41,7 +41,7 @@ final class LingodaAiBundleTest extends TestCase
 
         self::assertSame(AIProvider::OPENAI->value, $config['default_provider']);
         self::assertTrue($config['sanitization']['enabled']);
-        self::assertArrayNotHasKey('patterns', $config['sanitization']);
+        self::assertSame([], $config['sanitization']['patterns']);
         self::assertTrue($config['logging']['enabled']);
         self::assertSame('logger', $config['logging']['service']);
     }
@@ -119,17 +119,19 @@ final class LingodaAiBundleTest extends TestCase
         self::assertFalse($config['sanitization']['enabled']);
     }
 
-    public function testSanitizationPatternsAreNoLongerAccepted(): void
+    public function testSanitizationPatternsAreAccepted(): void
     {
-        $processor = new Processor();
-        /** @var Extension $extension */
-        $extension = $this->bundle->getContainerExtension();
-        $configuration = $extension->getConfiguration([], new ContainerBuilder());
+        $config = $this->processConfig(['sanitization' => ['patterns' => ['/secret-\d+/', '/internal-\w+/i']]]);
 
+        self::assertSame(['/secret-\d+/', '/internal-\w+/i'], $config['sanitization']['patterns']);
+    }
+
+    public function testInvalidSanitizationPatternIsRejected(): void
+    {
         $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessage('Unrecognized option "patterns" under "lingoda_ai.sanitization"');
+        $this->expectExceptionMessage('not a valid regular expression');
 
-        $processor->processConfiguration($configuration, [['sanitization' => ['patterns' => ['/secret/']]]]);
+        $this->processConfig(['sanitization' => ['patterns' => ['/unclosed(/']]]);
     }
 
     public function testLoggingConfiguration(): void
@@ -455,10 +457,6 @@ final class LingodaAiBundleTest extends TestCase
             ['openai' => ['api_key' => 'key', 'runtime_client' => 'aws']],
             'providers.openai.runtime_client is only supported for bedrock',
         ];
-        yield 'base url on gemini' => [
-            ['gemini' => ['api_key' => 'key', 'base_url' => 'https://example.com']],
-            'providers.gemini.base_url is only supported for typesafe',
-        ];
     }
 
     /**
@@ -479,8 +477,8 @@ final class LingodaAiBundleTest extends TestCase
 
         $typesafe = $config['providers']['typesafe'];
         self::assertSame('key', $typesafe['api_key']);
-        self::assertSame('jev-1.13.0', $typesafe['default_model']);
-        self::assertSame('https://api.typesafe.ai', $typesafe['base_url']);
+        self::assertSame('jev-latest', $typesafe['default_model']);
+        self::assertArrayNotHasKey('base_url', $typesafe);
     }
 
     public function testRateLimitDefaultsComeFromTheProviderEnum(): void

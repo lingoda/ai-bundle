@@ -67,6 +67,7 @@ lingoda_ai:
             # timeout: 30
     sanitization:
         enabled: true # Auto-sanitize sensitive data in prompt text (attachments are sent as provided)
+        patterns: [] # Extra regexes, each replaced with [REDACTED], on top of the SDK defaults
     logging:
         enabled: true
         service: 'monolog.logger' # Logger service ID
@@ -109,8 +110,7 @@ lingoda_ai:
     providers:
         typesafe: # registered only when api_key is set
             api_key: '%env(TYPESAFE_API_KEY)%'
-            default_model: 'jev-1.13.0' # default; jev-latest and jev-preview also exist
-            # base_url: 'https://api.typesafe.ai'
+            default_model: 'jev-latest' # default; pin 'jev-1.13.0' to keep decisions stable across TypeSafe releases
             # http_client: 'typesafe.http_client' # or timeout: 30
 ```
 

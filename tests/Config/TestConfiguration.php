@@ -40,6 +40,11 @@ final class TestConfiguration
             ],
             'sanitization' => [
                 'enabled' => true,
+                'patterns' => [
+                    '/test_\d+/',
+                    '/sensitive-\w+/',
+                    '/api[-_]key[-_]\w+/i',
+                ],
             ],
             'logging' => [
                 'enabled' => true,

@@ -31,6 +31,11 @@ use Lingoda\AiSdk\PlatformInterface;
 use Lingoda\AiSdk\RateLimit\RateLimitedClient;
 use Lingoda\AiSdk\RateLimit\SymfonyRateLimiter;
 use Lingoda\AiSdk\RateLimit\TokenEstimatorRegistry;
+use Lingoda\AiSdk\Security\AttributeSanitizer;
+use Lingoda\AiSdk\Security\DataSanitizer;
+use Lingoda\AiSdk\Security\Pattern\DefaultPatterns;
+use Lingoda\AiSdk\Security\Pattern\PatternRegistry;
+use Lingoda\AiSdk\Security\SensitiveContentFilter;
 use Symfony\AI\Platform\Bridge\Bedrock\Factory as BedrockPlatformFactory;
 use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -85,9 +90,6 @@ final class LingodaAiBundle extends AbstractBundle
                             ->scalarNode('runtime_client')
                                 ->info('Bedrock only: service id of an AsyncAws\\BedrockRuntime\\BedrockRuntimeClient (region and credentials come from it)')
                             ->end()
-                            ->scalarNode('base_url')
-                                ->info('TypeSafe only: API base URL')
-                            ->end()
                         ->end()
                     ->end()
                     ->beforeNormalization()
@@ -120,6 +122,16 @@ final class LingodaAiBundle extends AbstractBundle
                     ->children()
                         ->booleanNode('enabled')
                             ->defaultTrue()
+                        ->end()
+                        ->arrayNode('patterns')
+                            ->info('Extra regular expressions redacted as [REDACTED] in prompt text, on top of the SDK defaults')
+                            ->scalarPrototype()
+                                ->validate()
+                                    ->ifTrue(static fn (mixed $pattern): bool => !is_string($pattern) || @preg_match($pattern, '') === false)
+                                    ->thenInvalid('Invalid sanitization pattern %s: not a valid regular expression.')
+                                ->end()
+                            ->end()
+                            ->defaultValue([])
                         ->end()
                     ->end()
                 ->end()
@@ -242,7 +254,7 @@ final class LingodaAiBundle extends AbstractBundle
             $platformDef = new Definition(Platform::class, [
                 $clients,
                 $sanitizationEnabled,
-                null, // DataSanitizer will be created internally if enabled
+                $this->createSanitizerDefinition($config, $loggerRef), // null: Platform builds the default one
                 $loggerRef,
                 $config['default_provider'] ?? null
             ]);
@@ -459,7 +471,6 @@ final class LingodaAiBundle extends AbstractBundle
             '$httpClient' => $httpClient,
             '$apiKey' => $providerConfig['api_key'],
             '$defaultModel' => !empty($providerConfig['default_model']) ? $providerConfig['default_model'] : null,
-            '$baseUrl' => $providerConfig['base_url'],
         ];
         if ($loggerRef !== null) {
             $args['$logger'] = $loggerRef;
@@ -670,8 +681,7 @@ final class LingodaAiBundle extends AbstractBundle
             AIProvider::BEDROCK->value => [],
             AIProvider::TYPESAFE->value => [
                 'api_key' => '%env(TYPESAFE_API_KEY)%',
-                'default_model' => DecisionModel::JEV_1_13_0->value,
-                'base_url' => 'https://api.typesafe.ai',
+                'default_model' => DecisionModel::JEV_LATEST->value,
             ],
             default => [
                 'api_key' => '',
@@ -685,19 +695,79 @@ final class LingodaAiBundle extends AbstractBundle
      */
     private function getRateLimitDefaults(string $provider, string $type): array
     {
-        // Provider defaults live on AIProvider; unknown provider ids get a conservative limit
-        $defaults = AIProvider::tryFrom($provider)?->getDefaultRateLimits()
-            ?? ['requests_per_minute' => 60, 'tokens_per_minute' => 60000];
-        $amount = $type === 'tokens' ? $defaults['tokens_per_minute'] : $defaults['requests_per_minute'];
+        $defaults = [
+            AIProvider::OPENAI->value => [
+                'requests' => ['limit' => 180, 'amount' => 180],
+                'tokens' => ['limit' => 450000, 'amount' => 450000],
+            ],
+            AIProvider::ANTHROPIC->value => [
+                'requests' => ['limit' => 100, 'amount' => 100],
+                'tokens' => ['limit' => 100000, 'amount' => 100000],
+            ],
+            AIProvider::GEMINI->value => [
+                'requests' => ['limit' => 1000, 'amount' => 1000],
+                'tokens' => ['limit' => 1000000, 'amount' => 1000000],
+            ],
+            AIProvider::BEDROCK->value => [
+                'requests' => ['limit' => 60, 'amount' => 60],
+                'tokens' => ['limit' => 100000, 'amount' => 100000],
+            ],
+            AIProvider::TYPESAFE->value => [
+                'requests' => ['limit' => 1080, 'amount' => 1080], // 90% of 1,200 RPM
+                'tokens' => ['limit' => 13500000, 'amount' => 13500000], // 90% of 250K tokens per second
+            ],
+        ];
+
+        $providerDefaults = $defaults[$provider] ?? [
+            'requests' => [
+                'limit' => 60,
+                'amount' => 60,
+            ],
+            'tokens' => [
+                'limit' => 60000,
+                'amount' => 60000,
+            ]
+        ];
+        $typeDefaults = $providerDefaults[$type] ?? ['limit' => 60, 'amount' => 60];
 
         return [
             'policy' => 'token_bucket',
-            'limit' => $amount,
+            'limit' => $typeDefaults['limit'],
             'rate' => [
                 'interval' => '1 minute',
-                'amount' => $amount,
+                'amount' => $typeDefaults['amount'],
             ],
         ];
+    }
+
+    /**
+     * A DataSanitizer carrying sanitization.patterns next to the SDK defaults, or null when there are none.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function createSanitizerDefinition(array $config, ?Reference $loggerRef): ?Definition
+    {
+        $patterns = is_array($config['sanitization'] ?? null) ? ($config['sanitization']['patterns'] ?? []) : [];
+        if (!is_array($patterns) || $patterns === []) {
+            return null;
+        }
+
+        $logger = $loggerRef !== null ? ['$logger' => $loggerRef] : [];
+        $filter = new Definition(SensitiveContentFilter::class, [
+            '$patternRegistry' => new Definition(PatternRegistry::class, [new Definition(DefaultPatterns::class), [], array_values($patterns)]),
+            ...$logger,
+        ]);
+
+        // Same settings as DataSanitizer::createDefault(), with the extra patterns
+        return new Definition(DataSanitizer::class, [
+            '$filter' => $filter,
+            '$enabled' => true,
+            '$auditLog' => true,
+            ...$logger,
+            '$attributeSanitizer' => (new Definition(AttributeSanitizer::class))
+                ->setFactory([AttributeSanitizer::class, 'createDefault'])
+                ->setArguments(['$fallbackFilter' => $filter, ...$logger]),
+        ]);
     }
 
     /**
@@ -723,10 +793,6 @@ final class LingodaAiBundle extends AbstractBundle
             }
         } elseif (isset($providerConfig['runtime_client'])) {
             throw new \InvalidArgumentException(sprintf('providers.%s.runtime_client is only supported for bedrock.', $providerName));
-        }
-
-        if ($providerName !== AIProvider::TYPESAFE->value && isset($providerConfig['base_url'])) {
-            throw new \InvalidArgumentException(sprintf('providers.%s.base_url is only supported for typesafe.', $providerName));
         }
     }
 }
