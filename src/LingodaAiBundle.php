@@ -159,15 +159,13 @@ final class LingodaAiBundle extends AbstractBundle
                                         $result[$providerName] = $config;
                                         continue;
                                     }
-                                    $result[$providerName] = [];
+                                    $limits = [];
                                     foreach ($config as $type => $rateLimitConfig) {
-                                        if (!is_string($type) || !is_array($rateLimitConfig)) {
-                                            $result[$providerName][$type] = $rateLimitConfig;
-                                            continue;
-                                        }
-                                        $defaults = $this->getRateLimitDefaults($providerName, $type);
-                                        $result[$providerName][$type] = array_merge($defaults, $rateLimitConfig);
+                                        $limits[$type] = is_string($type) && is_array($rateLimitConfig)
+                                            ? array_merge($this->getRateLimitDefaults($providerName, $type), $rateLimitConfig)
+                                            : $rateLimitConfig;
                                     }
+                                    $result[$providerName] = $limits;
                                 }
                                 return $result;
                             })
@@ -446,7 +444,7 @@ final class LingodaAiBundle extends AbstractBundle
         foreach ($config['providers'] as $providerName => $providerConfig) {
             if (is_array($providerConfig) && !empty($providerConfig['default_model']) && is_string($providerConfig['default_model'])) {
                 $clientServiceId = "lingoda_ai.client.{$providerName}";
-                if ($builder->hasDefinition($clientServiceId)) {
+                if ($builder->has($clientServiceId)) {
                     // Create a method call that will configure the provider's default model
                     $platformDef->addMethodCall('configureProviderDefaultModel', [
                         $providerName,
