@@ -14,6 +14,8 @@ use Lingoda\AiSdk\Decision\DecisionPlatformInterface;
 use Lingoda\AiSdk\Platform;
 use Lingoda\AiSdk\PlatformInterface;
 use Lingoda\AiSdk\RateLimit\RateLimitedClient;
+use Lingoda\AiSdk\RateLimit\RateLimitedDecisionPlatform;
+use Lingoda\AiSdk\RateLimit\SymfonyRateLimiter;
 use Lingoda\AiSdk\RateLimit\TokenEstimatorRegistry;
 use Lingoda\AiSdk\Security\DataSanitizer;
 use Lingoda\AiSdk\Security\Pattern\PatternRegistry;
@@ -546,7 +548,7 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
 
         $this->load($config);
 
-        $definition = $this->container->getDefinition('lingoda_ai.decision_platform.typesafe');
+        $definition = $this->container->getDefinition('lingoda_ai.decision_platform.typesafe.base');
         self::assertSame(TypeSafeDecisionPlatform::class, $definition->getClass());
         self::assertSame('ts-key', $definition->getArgument('$apiKey'));
         self::assertSame('jev-latest', $definition->getArgument('$defaultModel'));
@@ -559,6 +561,16 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         self::assertSame([['timeout' => 12]], $httpClient->getArguments());
 
         $this->assertContainerBuilderHasAlias(DecisionPlatformInterface::class, 'lingoda_ai.decision_platform.typesafe');
+
+        // Rate limiting is on in the full test configuration: Jev sits behind the decision limiter
+        $rateLimited = $this->container->getDefinition('lingoda_ai.decision_platform.typesafe');
+        self::assertSame(RateLimitedDecisionPlatform::class, $rateLimited->getClass());
+        self::assertEquals(new Reference('lingoda_ai.decision_platform.typesafe.base'), $rateLimited->getArgument('$platform'));
+        self::assertEquals(new Reference('lingoda_ai.rate_limiter.typesafe'), $rateLimited->getArgument('$rateLimiter'));
+        self::assertEquals(new Reference('lingoda_ai.token_estimator_registry.typesafe'), $rateLimited->getArgument('$estimatorRegistry'));
+        self::assertTrue($rateLimited->getArgument('$enableRetries'));
+        self::assertSame(10, $rateLimited->getArgument('$maxRetries'));
+        $this->assertContainerBuilderHasService('lingoda_ai.rate_limiter.typesafe', SymfonyRateLimiter::class);
         $this->assertContainerBuilderNotHasService('lingoda_ai.client.typesafe');
         $this->assertContainerBuilderNotHasService('typesafePlatform');
         self::assertNotContains('lingoda_ai.client.typesafe', array_map('strval', $this->container->getDefinition('lingoda_ai.platform')->getArgument(0)));
@@ -572,10 +584,23 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
 
         $this->load($config);
 
-        $definition = $this->container->getDefinition('lingoda_ai.decision_platform.typesafe');
+        $definition = $this->container->getDefinition('lingoda_ai.decision_platform.typesafe.base');
         self::assertEquals(new Reference('app.http'), $definition->getArgument('$httpClient'));
         self::assertSame('jev-1.13.0', $definition->getArgument('$defaultModel'));
         self::assertArrayNotHasKey('$logger', $definition->getArguments());
+    }
+
+    public function testTypeSafeIsAnAliasOfTheBaseWithoutRateLimiting(): void
+    {
+        $config = $this->getFullTestConfiguration();
+        $config['rate_limiting']['enabled'] = false;
+        $config['providers']['typesafe'] = ['api_key' => 'ts-key'];
+
+        $this->load($config);
+
+        $this->assertContainerBuilderHasAlias('lingoda_ai.decision_platform.typesafe', 'lingoda_ai.decision_platform.typesafe.base');
+        $this->assertContainerBuilderHasAlias(DecisionPlatformInterface::class, 'lingoda_ai.decision_platform.typesafe');
+        $this->assertContainerBuilderNotHasService('lingoda_ai.rate_limiter.typesafe');
     }
 
     public function testTypeSafeWithoutApiKeyIsNotRegistered(): void

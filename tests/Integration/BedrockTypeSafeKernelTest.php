@@ -12,6 +12,7 @@ use Lingoda\AiSdk\Enum\Bedrock\ChatModel;
 use Lingoda\AiSdk\Platform;
 use Lingoda\AiSdk\PlatformInterface;
 use Lingoda\AiSdk\RateLimit\RateLimitedClient;
+use Lingoda\AiSdk\RateLimit\RateLimitedDecisionPlatform;
 use Lingoda\AiSdk\Security\DataSanitizer;
 use Nyholm\BundleTest\TestKernel;
 use PHPUnit\Framework\Attributes\Group;
@@ -63,8 +64,9 @@ final class BedrockTypeSafeKernelTest extends KernelTestCase
 
         $decisions = self::getContainer()->get('lingoda_ai.decision_platform.typesafe');
 
-        self::assertInstanceOf(TypeSafeDecisionPlatform::class, $decisions);
+        self::assertInstanceOf(RateLimitedDecisionPlatform::class, $decisions);
         self::assertTrue($decisions->getProvider()->is(AIProvider::TYPESAFE));
+        self::assertInstanceOf(TypeSafeDecisionPlatform::class, self::getContainer()->get('lingoda_ai.decision_platform.typesafe.base'));
     }
 
     public function testExternalRateLimiterResolvesConfiguredLimitersThroughTheLocator(): void

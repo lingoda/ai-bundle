@@ -29,6 +29,7 @@ use Lingoda\AiSdk\Enum\TypeSafe\DecisionModel;
 use Lingoda\AiSdk\Platform;
 use Lingoda\AiSdk\PlatformInterface;
 use Lingoda\AiSdk\RateLimit\RateLimitedClient;
+use Lingoda\AiSdk\RateLimit\RateLimitedDecisionPlatform;
 use Lingoda\AiSdk\RateLimit\SymfonyRateLimiter;
 use Lingoda\AiSdk\RateLimit\TokenEstimatorRegistry;
 use Lingoda\AiSdk\Security\AttributeSanitizer;
@@ -243,7 +244,7 @@ final class LingodaAiBundle extends AbstractBundle
         $this->registerProvider(AIProvider::ANTHROPIC->value, AnthropicClient::class, $config, $builder, $clients, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig);
         $this->registerProvider(AIProvider::GEMINI->value, GeminiClient::class, $config, $builder, $clients, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig);
         $this->registerBedrock($config, $builder, $clients, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig);
-        $this->registerDecisionPlatform($config, $builder, $loggerRef);
+        $this->registerDecisionPlatform($config, $builder, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig);
 
         // Main Platform service
         if (!empty($clients)) {
@@ -445,13 +446,20 @@ final class LingodaAiBundle extends AbstractBundle
     }
 
     /**
-     * Registers TypeSafe Jev as a DecisionPlatformInterface when providers.typesafe has an api_key.
-     * It is never added to the main platform: ask() cannot route to it.
+     * Registers TypeSafe Jev as a DecisionPlatformInterface when providers.typesafe has an api_key, behind
+     * RateLimitedDecisionPlatform when rate limiting is enabled. It is never added to the main platform:
+     * ask() cannot route to it.
      *
      * @param array<string, mixed> $config
+     * @param array<string, mixed> $rateLimitingConfig
      */
-    private function registerDecisionPlatform(array $config, ContainerBuilder $container, ?Reference $loggerRef): void
-    {
+    private function registerDecisionPlatform(
+        array $config,
+        ContainerBuilder $container,
+        ?Reference $loggerRef,
+        ?Reference $externalRateLimiterRef,
+        array $rateLimitingConfig
+    ): void {
         $providerConfig = is_array($config['providers'] ?? null) ? ($config['providers'][AIProvider::TYPESAFE->value] ?? null) : null;
         if (!is_array($providerConfig) || empty($providerConfig['api_key']) || !is_string($providerConfig['api_key'])) {
             return;
@@ -476,11 +484,29 @@ final class LingodaAiBundle extends AbstractBundle
             $args['$logger'] = $loggerRef;
         }
 
+        $provider = AIProvider::TYPESAFE->value;
+        $serviceId = "lingoda_ai.decision_platform.{$provider}";
+        $baseServiceId = "{$serviceId}.base";
+
         $definition = new Definition(TypeSafeDecisionPlatform::class, $args);
-        $definition->addTag('ai.decision_platform', ['provider' => AIProvider::TYPESAFE->value]);
+        $definition->addTag('ai.decision_platform', ['provider' => $provider]);
         $definition->setPublic(true); // Make public for testing
-        $container->setDefinition('lingoda_ai.decision_platform.typesafe', $definition);
-        $container->setAlias(DecisionPlatformInterface::class, 'lingoda_ai.decision_platform.typesafe');
+        $container->setDefinition($baseServiceId, $definition);
+
+        if ($externalRateLimiterRef !== null) {
+            $rateLimitedDef = new Definition(RateLimitedDecisionPlatform::class, [
+                '$platform' => new Reference($baseServiceId),
+                ...$this->registerRateLimiterServices($provider, $container, $externalRateLimiterRef, $loggerRef, $rateLimitingConfig),
+            ]);
+            $rateLimitedDef->addTag('ai.decision_platform', ['provider' => $provider, 'rate_limited' => true]);
+            $rateLimitedDef->setPublic(true); // Make public for testing
+            $container->setDefinition($serviceId, $rateLimitedDef);
+        } else {
+            $container->setAlias($serviceId, $baseServiceId);
+            $container->getAlias($serviceId)->setPublic(true);
+        }
+
+        $container->setAlias(DecisionPlatformInterface::class, $serviceId);
     }
 
     /**
@@ -508,40 +534,11 @@ final class LingodaAiBundle extends AbstractBundle
         // If external rate limiter is available, wrap the client with RateLimitedClient
         $clientServiceId = "lingoda_ai.client.{$providerName}";
         if ($externalRateLimiterRef !== null) {
-            $rateLimiterArgs = ['$externalRateLimiter' => $externalRateLimiterRef];
-            if ($loggerRef !== null) {
-                $rateLimiterArgs['$logger'] = $loggerRef;
-            }
-            // lockFactory is null by default, so no need to specify it
-
-            $rateLimiterDef = new Definition(SymfonyRateLimiter::class, $rateLimiterArgs);
-            $rateLimiterServiceId = "lingoda_ai.rate_limiter.{$providerName}";
-            $rateLimiterDef->setPublic(true); // Make public for testing
-            $container->setDefinition($rateLimiterServiceId, $rateLimiterDef);
-
-            // SDK estimators per provider, generic estimator for the rest
-            $estimatorRegistryDef = (new Definition(TokenEstimatorRegistry::class))
-                ->setFactory([TokenEstimatorRegistry::class, 'createDefault'])
-            ;
-            $estimatorRegistryServiceId = "lingoda_ai.token_estimator_registry.{$providerName}";
-            $estimatorRegistryDef->setPublic(true); // Make public for testing
-            $container->setDefinition($estimatorRegistryServiceId, $estimatorRegistryDef);
-
-            // Get retry configuration
-            $enableRetries = (bool) ($rateLimitingConfig['enable_retries'] ?? true);
-            $maxRetries = is_numeric($rateLimitingConfig['max_retries'] ?? 10) ? (int) ($rateLimitingConfig['max_retries'] ?? 10) : 10;
-
             $rateLimitedClientArgs = [
                 '$client' => new Reference($baseClientServiceId),
-                '$rateLimiter' => new Reference($rateLimiterServiceId),
-                '$estimatorRegistry' => new Reference($estimatorRegistryServiceId),
-                '$enableRetries' => $enableRetries,
-                '$maxRetries' => $maxRetries,
+                ...$this->registerRateLimiterServices($providerName, $container, $externalRateLimiterRef, $loggerRef, $rateLimitingConfig),
                 '$retryTransportErrors' => $retryTransportErrors,
             ];
-            if ($loggerRef !== null) {
-                $rateLimitedClientArgs['$logger'] = $loggerRef;
-            }
             // DelayInterface is null by default, so no need to specify it
 
             $rateLimitedClientDef = new Definition(RateLimitedClient::class, $rateLimitedClientArgs);
@@ -566,6 +563,45 @@ final class LingodaAiBundle extends AbstractBundle
         // Set up autowiring for provider-specific platforms
         $container->setAlias(ProviderPlatform::class . ' $' . $providerPlatformServiceId, $providerPlatformServiceId);
         $container->setAlias(PlatformInterface::class . ' $' . $providerPlatformServiceId, $providerPlatformServiceId);
+    }
+
+    /**
+     * Registers the provider's rate limiter and token estimator registry, shared by chat clients and decision platforms.
+     *
+     * @param array<string, mixed> $rateLimitingConfig
+     *
+     * @return array<string, mixed> Named constructor arguments for RateLimitedClient or RateLimitedDecisionPlatform
+     */
+    private function registerRateLimiterServices(
+        string $providerName,
+        ContainerBuilder $container,
+        Reference $externalRateLimiterRef,
+        ?Reference $loggerRef,
+        array $rateLimitingConfig
+    ): array {
+        $logger = $loggerRef !== null ? ['$logger' => $loggerRef] : [];
+
+        // lockFactory is null by default, so no need to specify it
+        $rateLimiterDef = new Definition(SymfonyRateLimiter::class, ['$externalRateLimiter' => $externalRateLimiterRef, ...$logger]);
+        $rateLimiterServiceId = "lingoda_ai.rate_limiter.{$providerName}";
+        $rateLimiterDef->setPublic(true); // Make public for testing
+        $container->setDefinition($rateLimiterServiceId, $rateLimiterDef);
+
+        // SDK estimators per provider, generic estimator for the rest
+        $estimatorRegistryDef = (new Definition(TokenEstimatorRegistry::class))
+            ->setFactory([TokenEstimatorRegistry::class, 'createDefault'])
+        ;
+        $estimatorRegistryServiceId = "lingoda_ai.token_estimator_registry.{$providerName}";
+        $estimatorRegistryDef->setPublic(true); // Make public for testing
+        $container->setDefinition($estimatorRegistryServiceId, $estimatorRegistryDef);
+
+        return [
+            '$rateLimiter' => new Reference($rateLimiterServiceId),
+            '$estimatorRegistry' => new Reference($estimatorRegistryServiceId),
+            '$enableRetries' => (bool) ($rateLimitingConfig['enable_retries'] ?? true),
+            '$maxRetries' => is_numeric($rateLimitingConfig['max_retries'] ?? 10) ? (int) ($rateLimitingConfig['max_retries'] ?? 10) : 10,
+            ...$logger,
+        ];
     }
 
     /**

@@ -103,7 +103,7 @@ lingoda_ai:
 
 ### TypeSafe Jev (decisions)
 
-Jev answers structured questions about a text state. It is registered as `Lingoda\AiSdk\Decision\DecisionPlatformInterface`, never on the main platform, so `ask()` cannot route to it and `default_provider: typesafe` is rejected.
+Jev answers structured questions about a text state. It is registered as `Lingoda\AiSdk\Decision\DecisionPlatformInterface`, never on the main platform, so `ask()` cannot route to it and `default_provider: typesafe` is rejected. With rate limiting enabled it sits behind the same limiter as the chat providers (TypeSafe allows 1,200 requests per minute and 250,000 input tokens per second per account; the defaults use 90%), and 429/529 answers are retried with backoff.
 
 ```yaml
 lingoda_ai:
@@ -427,7 +427,7 @@ vendor/bin/phpunit
 
 - PHP ^8.4
 - Symfony ^7.4|^8.0
-- lingoda/ai-sdk ^2.0
+- lingoda/ai-sdk ^2.1
 - For Bedrock: symfony/ai-bedrock-platform ~0.13.0 and async-aws/bedrock-runtime
 
 ## Available Services
