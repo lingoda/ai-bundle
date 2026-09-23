@@ -519,7 +519,10 @@ final class LingodaAiBundle extends AbstractBundle
             $rateLimiterDef->setPublic(true); // Make public for testing
             $container->setDefinition($rateLimiterServiceId, $rateLimiterDef);
 
-            $estimatorRegistryDef = new Definition(TokenEstimatorRegistry::class);
+            // SDK estimators per provider, generic estimator for the rest
+            $estimatorRegistryDef = (new Definition(TokenEstimatorRegistry::class))
+                ->setFactory([TokenEstimatorRegistry::class, 'createDefault'])
+            ;
             $estimatorRegistryServiceId = "lingoda_ai.token_estimator_registry.{$providerName}";
             $estimatorRegistryDef->setPublic(true); // Make public for testing
             $container->setDefinition($estimatorRegistryServiceId, $estimatorRegistryDef);
@@ -775,6 +778,14 @@ final class LingodaAiBundle extends AbstractBundle
      */
     private static function validateProviderConfig(string $providerName, mixed $providerConfig): void
     {
+        if (AIProvider::tryFrom($providerName) === null) {
+            throw new \InvalidArgumentException(sprintf(
+                'Unknown provider "%s". Supported providers: %s.',
+                $providerName,
+                implode(', ', array_map(static fn (AIProvider $provider): string => $provider->value, AIProvider::cases()))
+            ));
+        }
+
         if (!is_array($providerConfig)) {
             return;
         }

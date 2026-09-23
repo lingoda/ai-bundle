@@ -35,7 +35,7 @@ final readonly class BundleExternalRateLimiter implements ExternalRateLimiterInt
     {
         $serviceId = $this->getServiceId($providerId, $type);
 
-        if ($this->container->has($serviceId)) {
+        if ($serviceId !== null && $this->container->has($serviceId)) {
             $factory = $this->container->get($serviceId);
             Assert::isInstanceOf($factory, RateLimiterFactory::class);
 
@@ -43,8 +43,7 @@ final readonly class BundleExternalRateLimiter implements ExternalRateLimiterInt
         }
 
         throw new \RuntimeException(sprintf(
-            'Rate limiter service "%s" not found for provider "%s" and type "%s"',
-            $serviceId,
+            'No rate limiter configured for provider "%s" and type "%s"',
             $providerId,
             $type
         ));
@@ -54,7 +53,7 @@ final readonly class BundleExternalRateLimiter implements ExternalRateLimiterInt
     {
         $serviceId = $this->getServiceId($providerId, $type);
 
-        return $this->container->has($serviceId);
+        return $serviceId !== null && $this->container->has($serviceId);
     }
 
     public function getRateLimiterKey(string $providerId, string $type, ModelInterface $model): string
@@ -63,9 +62,11 @@ final readonly class BundleExternalRateLimiter implements ExternalRateLimiterInt
         return sprintf('%s_%s_%s', $providerId, $type, $model->getId());
     }
 
-    private function getServiceId(string $providerId, string $type): string
+    /**
+     * Only limiters configured under lingoda_ai.rate_limiting.providers are mapped.
+     */
+    private function getServiceId(string $providerId, string $type): ?string
     {
-        // Check if there's a custom mapping
-        return $this->rateLimiterServiceMap[$providerId][$type] ?? sprintf('limiter.%s_%s', $providerId, $type);
+        return $this->rateLimiterServiceMap[$providerId][$type] ?? null;
     }
 }

@@ -481,14 +481,36 @@ final class LingodaAiBundleTest extends TestCase
         self::assertArrayNotHasKey('base_url', $typesafe);
     }
 
-    public function testRateLimitDefaultsComeFromTheProviderEnum(): void
+    /**
+     * @return iterable<string, array{string, int, int}>
+     */
+    public static function bundleRateLimitDefaults(): iterable
     {
-        $config = $this->processConfig(['rate_limiting' => ['providers' => ['bedrock' => ['requests' => [], 'tokens' => []]]]]);
+        yield 'openai' => ['openai', 180, 450000];
+        yield 'anthropic' => ['anthropic', 100, 100000];
+        yield 'gemini' => ['gemini', 1000, 1000000];
+        yield 'bedrock' => ['bedrock', 60, 100000];
+        yield 'typesafe' => ['typesafe', 1080, 13500000];
+    }
 
-        $bedrock = $config['rate_limiting']['providers']['bedrock'];
-        self::assertSame(AIProvider::BEDROCK->getDefaultRateLimits()['requests_per_minute'], $bedrock['requests']['limit']);
-        self::assertSame(AIProvider::BEDROCK->getDefaultRateLimits()['tokens_per_minute'], $bedrock['tokens']['limit']);
-        self::assertSame(AIProvider::BEDROCK->getDefaultRateLimits()['tokens_per_minute'], $bedrock['tokens']['rate']['amount']);
+    #[DataProvider('bundleRateLimitDefaults')]
+    public function testBundleRateLimitDefaultsFillAnEmptyProviderBlock(string $provider, int $requests, int $tokens): void
+    {
+        $config = $this->processConfig(['rate_limiting' => ['providers' => [$provider => ['requests' => [], 'tokens' => []]]]]);
+
+        $limits = $config['rate_limiting']['providers'][$provider];
+        self::assertSame($requests, $limits['requests']['limit']);
+        self::assertSame($requests, $limits['requests']['rate']['amount']);
+        self::assertSame($tokens, $limits['tokens']['limit']);
+        self::assertSame($tokens, $limits['tokens']['rate']['amount']);
+    }
+
+    public function testUnknownProviderIsRejected(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage('Unknown provider "openia". Supported providers: openai, anthropic, gemini, bedrock, typesafe.');
+
+        $this->processConfig(['providers' => ['openia' => ['api_key' => 'key']]]);
     }
 
     public function testUnknownProviderRateLimitsFallBackToConservativeDefaults(): void

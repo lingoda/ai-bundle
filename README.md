@@ -270,6 +270,8 @@ lingoda_ai:
         enabled: true  # Default - can be disabled if needed
 ```
 
+Limits resolve in this order: your `rate_limiting.providers.<provider>` values, then the bundle's defaults for any key you leave out, then the SDK's `AIProvider` defaults for a provider you do not list. Only the first two are shared through `storage` across processes; a provider you do not list gets an in-memory limit per process, so N workers allow N times that limit.
+
 ### Custom Rate Limits (Optional)
 
 Configure custom limits per provider when needed:

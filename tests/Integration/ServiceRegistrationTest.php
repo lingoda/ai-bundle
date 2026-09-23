@@ -14,6 +14,7 @@ use Lingoda\AiSdk\Decision\DecisionPlatformInterface;
 use Lingoda\AiSdk\Platform;
 use Lingoda\AiSdk\PlatformInterface;
 use Lingoda\AiSdk\RateLimit\RateLimitedClient;
+use Lingoda\AiSdk\RateLimit\TokenEstimatorRegistry;
 use Lingoda\AiSdk\Security\DataSanitizer;
 use Lingoda\AiSdk\Security\Pattern\PatternRegistry;
 use Matthias\SymfonyDependencyInjectionTest\PhpUnit\AbstractExtensionTestCase;
@@ -585,6 +586,14 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         $this->load($config);
 
         $this->assertContainerBuilderNotHasService('lingoda_ai.decision_platform.typesafe');
+    }
+
+    public function testRateLimitedClientsUseTheSdkDefaultTokenEstimators(): void
+    {
+        $this->load($this->getFullTestConfiguration());
+
+        $registry = $this->container->getDefinition('lingoda_ai.token_estimator_registry.openai');
+        self::assertSame([TokenEstimatorRegistry::class, 'createDefault'], $registry->getFactory());
     }
 
     public function testNoDefaultPlatformAlias(): void
