@@ -32,7 +32,7 @@ final class AiListModelsCommand extends Command
             'provider',
             'p',
             InputOption::VALUE_REQUIRED,
-            'Filter by specific provider (openai, anthropic, gemini)'
+            'Filter by specific provider (openai, anthropic, gemini, bedrock)'
         );
 
         $this->addOption(

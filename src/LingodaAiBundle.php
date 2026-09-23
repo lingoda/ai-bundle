@@ -4,6 +4,7 @@ declare(strict_types = 1);
 
 namespace Lingoda\AiBundle;
 
+use AsyncAws\BedrockRuntime\BedrockRuntimeClient;
 use Lingoda\AiBundle\Command\AiListModelsCommand;
 use Lingoda\AiBundle\Command\AiListProvidersCommand;
 use Lingoda\AiBundle\Command\AiTestConnectionCommand;
@@ -12,28 +13,43 @@ use Lingoda\AiBundle\Platform\ProviderPlatform;
 use Lingoda\AiBundle\RateLimit\BundleExternalRateLimiter;
 use Lingoda\AiSdk\Client\Anthropic\AnthropicClient;
 use Lingoda\AiSdk\Client\Anthropic\AnthropicClientFactory;
+use Lingoda\AiSdk\Client\Bedrock\BedrockClient;
+use Lingoda\AiSdk\Client\Bedrock\BedrockClientFactory;
 use Lingoda\AiSdk\Client\Gemini\GeminiClient;
 use Lingoda\AiSdk\Client\Gemini\GeminiClientFactory;
 use Lingoda\AiSdk\Client\OpenAI\OpenAIClient;
 use Lingoda\AiSdk\Client\OpenAI\OpenAIClientFactory;
+use Lingoda\AiSdk\Client\TypeSafe\TypeSafeDecisionPlatform;
+use Lingoda\AiSdk\Decision\DecisionPlatformInterface;
 use Lingoda\AiSdk\Enum\AIProvider;
 use Lingoda\AiSdk\Enum\Anthropic\ChatModel as AnthropicChatModel;
 use Lingoda\AiSdk\Enum\Gemini\ChatModel as GeminiChatModel;
 use Lingoda\AiSdk\Enum\OpenAI\ChatModel as OpenAIChatModel;
+use Lingoda\AiSdk\Enum\TypeSafe\DecisionModel;
 use Lingoda\AiSdk\Platform;
 use Lingoda\AiSdk\PlatformInterface;
 use Lingoda\AiSdk\RateLimit\RateLimitedClient;
+use Lingoda\AiSdk\RateLimit\RateLimitedDecisionPlatform;
 use Lingoda\AiSdk\RateLimit\SymfonyRateLimiter;
 use Lingoda\AiSdk\RateLimit\TokenEstimatorRegistry;
+use Lingoda\AiSdk\Security\AttributeSanitizer;
+use Lingoda\AiSdk\Security\DataSanitizer;
+use Lingoda\AiSdk\Security\Pattern\DefaultPatterns;
+use Lingoda\AiSdk\Security\Pattern\PatternRegistry;
+use Lingoda\AiSdk\Security\SensitiveContentFilter;
+use Symfony\AI\Platform\Bridge\Bedrock\Factory as BedrockPlatformFactory;
 use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
+use Symfony\Component\DependencyInjection\Compiler\ServiceLocatorTagPass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\CacheStorage;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Webmozart\Assert\Assert;
 
 final class LingodaAiBundle extends AbstractBundle
@@ -43,7 +59,11 @@ final class LingodaAiBundle extends AbstractBundle
         /** @var ArrayNodeDefinition $rootNode */
         $rootNode = $definition->rootNode();
 
-        $supportedProviders = array_map(static fn (AIProvider $provider) => $provider->value, AIProvider::cases());
+        // TypeSafe answers decide() only, so it can never be the provider ask() falls back to
+        $supportedProviders = array_values(array_map(
+            static fn (AIProvider $provider) => $provider->value,
+            array_filter(AIProvider::cases(), static fn (AIProvider $provider) => $provider !== AIProvider::TYPESAFE)
+        ));
 
         $rootNode
             ->children()
@@ -68,6 +88,9 @@ final class LingodaAiBundle extends AbstractBundle
                                 ->defaultValue(30)
                                 ->info('Request timeout in seconds (only used if no custom http_client is provided)')
                             ->end()
+                            ->scalarNode('runtime_client')
+                                ->info('Bedrock only: service id of an AsyncAws\\BedrockRuntime\\BedrockRuntimeClient (region and credentials come from it)')
+                            ->end()
                         ->end()
                     ->end()
                     ->beforeNormalization()
@@ -85,6 +108,15 @@ final class LingodaAiBundle extends AbstractBundle
                             return $providers;
                         })
                     ->end()
+                    ->validate()
+                        ->always(static function (array $providers): array {
+                            foreach ($providers as $providerName => $providerConfig) {
+                                self::validateProviderConfig((string) $providerName, $providerConfig);
+                            }
+
+                            return $providers;
+                        })
+                    ->end()
                 ->end()
                 ->arrayNode('sanitization')
                     ->addDefaultsIfNotSet()
@@ -93,7 +125,13 @@ final class LingodaAiBundle extends AbstractBundle
                             ->defaultTrue()
                         ->end()
                         ->arrayNode('patterns')
-                            ->scalarPrototype()->end()
+                            ->info('Extra regular expressions redacted as [REDACTED] in prompt text, on top of the SDK defaults')
+                            ->scalarPrototype()
+                                ->validate()
+                                    ->ifTrue(static fn (mixed $pattern): bool => !is_string($pattern) || @preg_match($pattern, '') === false)
+                                    ->thenInvalid('Invalid sanitization pattern %s: not a valid regular expression.')
+                                ->end()
+                            ->end()
                             ->defaultValue([])
                         ->end()
                     ->end()
@@ -205,6 +243,8 @@ final class LingodaAiBundle extends AbstractBundle
         $this->registerProvider(AIProvider::OPENAI->value, OpenAIClient::class, $config, $builder, $clients, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig);
         $this->registerProvider(AIProvider::ANTHROPIC->value, AnthropicClient::class, $config, $builder, $clients, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig);
         $this->registerProvider(AIProvider::GEMINI->value, GeminiClient::class, $config, $builder, $clients, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig);
+        $this->registerBedrock($config, $builder, $clients, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig);
+        $this->registerDecisionPlatform($config, $builder, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig);
 
         // Main Platform service
         if (!empty($clients)) {
@@ -212,10 +252,18 @@ final class LingodaAiBundle extends AbstractBundle
                 ? ($config['sanitization']['enabled'] ?? true)
                 : true;
 
+            // One sanitizer for every platform when patterns are configured; null lets Platform build the default one
+            $sanitizerDef = $this->createSanitizerDefinition($config, $loggerRef);
+            $sanitizerRef = null;
+            if ($sanitizerDef !== null) {
+                $builder->setDefinition('lingoda_ai.data_sanitizer', $sanitizerDef);
+                $sanitizerRef = new Reference('lingoda_ai.data_sanitizer');
+            }
+
             $platformDef = new Definition(Platform::class, [
-                $clients,
+                array_values($clients),
                 $sanitizationEnabled,
-                null, // DataSanitizer will be created internally if enabled
+                $sanitizerRef,
                 $loggerRef,
                 $config['default_provider'] ?? null
             ]);
@@ -231,10 +279,8 @@ final class LingodaAiBundle extends AbstractBundle
             $builder->setAlias(Platform::class, 'lingoda_ai.platform');
             $builder->setAlias(PlatformInterface::class, 'lingoda_ai.platform');
 
-            // If there's a default provider, also alias it
-            if (!empty($config['default_provider']) && is_string($config['default_provider'])) {
-                $defaultProviderPlatformId = $config['default_provider'] . 'Platform';
-                $builder->setAlias('lingoda_ai.default_platform', $defaultProviderPlatformId);
+            foreach ($clients as $providerName => $clientRef) {
+                $this->registerProviderPlatform($providerName, $clientRef, (bool) $sanitizationEnabled, $sanitizerRef, $loggerRef, $config, $builder);
             }
         }
 
@@ -311,7 +357,7 @@ final class LingodaAiBundle extends AbstractBundle
 
     /**
      * @param array<string, mixed> $config
-     * @param array<Reference> $clients
+     * @param array<string, Reference> $clients
      * @param array<string, mixed> $rateLimitingConfig
      */
     private function registerProvider(
@@ -366,6 +412,131 @@ final class LingodaAiBundle extends AbstractBundle
         $baseClientDef = new Definition($clientClass);
         $baseClientDef->setFactory([$factoryClass, 'createClient']);
         $baseClientDef->setArguments($factoryArgs);
+
+        $this->registerClient($providerName, $baseClientDef, $container, $clients, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig);
+    }
+
+    /**
+     * Registers the Bedrock client when providers.bedrock is configured. Region and credentials come from the
+     * configured async-aws runtime client, whose own retries replace the rate limiter's transport retries.
+     *
+     * @param array<string, mixed> $config
+     * @param array<string, Reference> $clients
+     * @param array<string, mixed> $rateLimitingConfig
+     */
+    private function registerBedrock(
+        array $config,
+        ContainerBuilder $container,
+        array &$clients,
+        ?Reference $loggerRef,
+        ?Reference $externalRateLimiterRef,
+        array $rateLimitingConfig
+    ): void {
+        $providerConfig = is_array($config['providers'] ?? null) ? ($config['providers'][AIProvider::BEDROCK->value] ?? null) : null;
+        if (!is_array($providerConfig)) {
+            return;
+        }
+
+        // Only reachable without the optional packages installed
+        // @codeCoverageIgnoreStart
+        if (!class_exists(BedrockPlatformFactory::class) || !class_exists(BedrockRuntimeClient::class)) {
+            throw new \LogicException('The bedrock provider requires symfony/ai-bedrock-platform and async-aws/bedrock-runtime. Run "composer require symfony/ai-bedrock-platform:~0.13.0 async-aws/bedrock-runtime".');
+        }
+        // @codeCoverageIgnoreEnd
+
+        Assert::string($providerConfig['runtime_client']);
+        $factoryArgs = ['$runtimeClient' => new Reference($providerConfig['runtime_client'])];
+        if ($loggerRef !== null) {
+            $factoryArgs['$logger'] = $loggerRef;
+        }
+
+        $baseClientDef = new Definition(BedrockClient::class);
+        $baseClientDef->setFactory([BedrockClientFactory::class, 'createClient']);
+        $baseClientDef->setArguments($factoryArgs);
+
+        $this->registerClient(AIProvider::BEDROCK->value, $baseClientDef, $container, $clients, $loggerRef, $externalRateLimiterRef, $rateLimitingConfig, retryTransportErrors: false);
+    }
+
+    /**
+     * Registers TypeSafe Jev as a DecisionPlatformInterface when providers.typesafe has an api_key, behind
+     * RateLimitedDecisionPlatform when rate limiting is enabled. It is never added to the main platform:
+     * ask() cannot route to it.
+     *
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $rateLimitingConfig
+     */
+    private function registerDecisionPlatform(
+        array $config,
+        ContainerBuilder $container,
+        ?Reference $loggerRef,
+        ?Reference $externalRateLimiterRef,
+        array $rateLimitingConfig
+    ): void {
+        $providerConfig = is_array($config['providers'] ?? null) ? ($config['providers'][AIProvider::TYPESAFE->value] ?? null) : null;
+        if (!is_array($providerConfig) || empty($providerConfig['api_key']) || !is_string($providerConfig['api_key'])) {
+            return;
+        }
+
+        if (!empty($providerConfig['http_client'])) {
+            Assert::string($providerConfig['http_client']);
+            $httpClient = new Reference($providerConfig['http_client']);
+        } else {
+            $httpClient = (new Definition(HttpClientInterface::class))
+                ->setFactory([HttpClient::class, 'create'])
+                ->setArguments([['timeout' => $providerConfig['timeout']]])
+            ;
+        }
+
+        $args = [
+            '$httpClient' => $httpClient,
+            '$apiKey' => $providerConfig['api_key'],
+            '$defaultModel' => !empty($providerConfig['default_model']) ? $providerConfig['default_model'] : null,
+        ];
+        if ($loggerRef !== null) {
+            $args['$logger'] = $loggerRef;
+        }
+
+        $provider = AIProvider::TYPESAFE->value;
+        $serviceId = "lingoda_ai.decision_platform.{$provider}";
+        $baseServiceId = "{$serviceId}.base";
+
+        $definition = new Definition(TypeSafeDecisionPlatform::class, $args);
+        $definition->addTag('ai.decision_platform', ['provider' => $provider]);
+        $definition->setPublic(true); // Make public for testing
+        $container->setDefinition($baseServiceId, $definition);
+
+        if ($externalRateLimiterRef !== null) {
+            $rateLimitedDef = new Definition(RateLimitedDecisionPlatform::class, [
+                '$platform' => new Reference($baseServiceId),
+                ...$this->registerRateLimiterServices($provider, $container, $externalRateLimiterRef, $loggerRef, $rateLimitingConfig),
+            ]);
+            $rateLimitedDef->addTag('ai.decision_platform', ['provider' => $provider, 'rate_limited' => true]);
+            $rateLimitedDef->setPublic(true); // Make public for testing
+            $container->setDefinition($serviceId, $rateLimitedDef);
+        } else {
+            $container->setAlias($serviceId, $baseServiceId);
+            $container->getAlias($serviceId)->setPublic(true);
+        }
+
+        $container->setAlias(DecisionPlatformInterface::class, $serviceId);
+    }
+
+    /**
+     * Registers the base client, its optional rate-limited wrapper and the provider-specific platform.
+     *
+     * @param array<string, Reference> $clients
+     * @param array<string, mixed> $rateLimitingConfig
+     */
+    private function registerClient(
+        string $providerName,
+        Definition $baseClientDef,
+        ContainerBuilder $container,
+        array &$clients,
+        ?Reference $loggerRef,
+        ?Reference $externalRateLimiterRef,
+        array $rateLimitingConfig,
+        bool $retryTransportErrors = true
+    ): void {
         $baseClientDef->addTag('ai.client', ['provider' => $providerName]);
         $baseClientDef->setPublic(true); // Make public for testing
 
@@ -375,36 +546,11 @@ final class LingodaAiBundle extends AbstractBundle
         // If external rate limiter is available, wrap the client with RateLimitedClient
         $clientServiceId = "lingoda_ai.client.{$providerName}";
         if ($externalRateLimiterRef !== null) {
-            $rateLimiterArgs = ['$externalRateLimiter' => $externalRateLimiterRef];
-            if ($loggerRef !== null) {
-                $rateLimiterArgs['$logger'] = $loggerRef;
-            }
-            // lockFactory is null by default, so no need to specify it
-
-            $rateLimiterDef = new Definition(SymfonyRateLimiter::class, $rateLimiterArgs);
-            $rateLimiterServiceId = "lingoda_ai.rate_limiter.{$providerName}";
-            $rateLimiterDef->setPublic(true); // Make public for testing
-            $container->setDefinition($rateLimiterServiceId, $rateLimiterDef);
-
-            $estimatorRegistryDef = new Definition(TokenEstimatorRegistry::class);
-            $estimatorRegistryServiceId = "lingoda_ai.token_estimator_registry.{$providerName}";
-            $estimatorRegistryDef->setPublic(true); // Make public for testing
-            $container->setDefinition($estimatorRegistryServiceId, $estimatorRegistryDef);
-
-            // Get retry configuration
-            $enableRetries = (bool) ($rateLimitingConfig['enable_retries'] ?? true);
-            $maxRetries = is_numeric($rateLimitingConfig['max_retries'] ?? 10) ? (int) ($rateLimitingConfig['max_retries'] ?? 10) : 10;
-
             $rateLimitedClientArgs = [
                 '$client' => new Reference($baseClientServiceId),
-                '$rateLimiter' => new Reference($rateLimiterServiceId),
-                '$estimatorRegistry' => new Reference($estimatorRegistryServiceId),
-                '$enableRetries' => $enableRetries,
-                '$maxRetries' => $maxRetries,
+                ...$this->registerRateLimiterServices($providerName, $container, $externalRateLimiterRef, $loggerRef, $rateLimitingConfig),
+                '$retryTransportErrors' => $retryTransportErrors,
             ];
-            if ($loggerRef !== null) {
-                $rateLimitedClientArgs['$logger'] = $loggerRef;
-            }
             // DelayInterface is null by default, so no need to specify it
 
             $rateLimitedClientDef = new Definition(RateLimitedClient::class, $rateLimitedClientArgs);
@@ -417,18 +563,79 @@ final class LingodaAiBundle extends AbstractBundle
             $container->getAlias($clientServiceId)->setPublic(true);
         }
 
-        $clients[] = new Reference($clientServiceId);
+        $clients[$providerName] = new Reference($clientServiceId);
+    }
 
-
-        // Register provider-specific platform (single provider)
-        $providerPlatformDef = new Definition(ProviderPlatform::class, [new Reference($clientServiceId)]);
+    /**
+     * Registers the single-provider platform with the main platform's sanitization, logger and default model,
+     * so injecting e.g. PlatformInterface $openaiPlatform behaves like asking the main platform for that provider.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerProviderPlatform(
+        string $providerName,
+        Reference $clientRef,
+        bool $sanitizationEnabled,
+        ?Reference $sanitizerRef,
+        ?Reference $loggerRef,
+        array $config,
+        ContainerBuilder $container
+    ): void {
+        $providerPlatformDef = new Definition(ProviderPlatform::class, [$clientRef, $sanitizationEnabled, $sanitizerRef, $loggerRef]);
         $providerPlatformDef->addTag('ai.platform', ['provider' => $providerName]);
+
+        $providers = is_array($config['providers'] ?? null) ? $config['providers'] : [];
+        $providerConfig = is_array($providers[$providerName] ?? null) ? $providers[$providerName] : [];
+        $defaultModel = $providerConfig['default_model'] ?? null;
+        if (is_string($defaultModel) && $defaultModel !== '') {
+            $providerPlatformDef->addMethodCall('configureProviderDefaultModel', [$providerName, $defaultModel]);
+        }
+
         $providerPlatformServiceId = $providerName . 'Platform';
         $container->setDefinition($providerPlatformServiceId, $providerPlatformDef);
 
         // Set up autowiring for provider-specific platforms
         $container->setAlias(ProviderPlatform::class . ' $' . $providerPlatformServiceId, $providerPlatformServiceId);
         $container->setAlias(PlatformInterface::class . ' $' . $providerPlatformServiceId, $providerPlatformServiceId);
+    }
+
+    /**
+     * Registers the provider's rate limiter and token estimator registry, shared by chat clients and decision platforms.
+     *
+     * @param array<string, mixed> $rateLimitingConfig
+     *
+     * @return array<string, mixed> Named constructor arguments for RateLimitedClient or RateLimitedDecisionPlatform
+     */
+    private function registerRateLimiterServices(
+        string $providerName,
+        ContainerBuilder $container,
+        Reference $externalRateLimiterRef,
+        ?Reference $loggerRef,
+        array $rateLimitingConfig
+    ): array {
+        $logger = $loggerRef !== null ? ['$logger' => $loggerRef] : [];
+
+        // lockFactory is null by default, so no need to specify it
+        $rateLimiterDef = new Definition(SymfonyRateLimiter::class, ['$externalRateLimiter' => $externalRateLimiterRef, ...$logger]);
+        $rateLimiterServiceId = "lingoda_ai.rate_limiter.{$providerName}";
+        $rateLimiterDef->setPublic(true); // Make public for testing
+        $container->setDefinition($rateLimiterServiceId, $rateLimiterDef);
+
+        // SDK estimators per provider, generic estimator for the rest
+        $estimatorRegistryDef = (new Definition(TokenEstimatorRegistry::class))
+            ->setFactory([TokenEstimatorRegistry::class, 'createDefault'])
+        ;
+        $estimatorRegistryServiceId = "lingoda_ai.token_estimator_registry.{$providerName}";
+        $estimatorRegistryDef->setPublic(true); // Make public for testing
+        $container->setDefinition($estimatorRegistryServiceId, $estimatorRegistryDef);
+
+        return [
+            '$rateLimiter' => new Reference($rateLimiterServiceId),
+            '$estimatorRegistry' => new Reference($estimatorRegistryServiceId),
+            '$enableRetries' => (bool) ($rateLimitingConfig['enable_retries'] ?? true),
+            '$maxRetries' => is_numeric($rateLimitingConfig['max_retries'] ?? 10) ? (int) ($rateLimitingConfig['max_retries'] ?? 10) : 10,
+            ...$logger,
+        ];
     }
 
     /**
@@ -464,7 +671,7 @@ final class LingodaAiBundle extends AbstractBundle
     {
         // Register rate limiter factories for each provider and type
         $rateLimiterServiceMap = [];
-
+        $locatorServices = [];
 
         if (isset($rateLimitingConfig['providers']) && is_array($rateLimitingConfig['providers'])) {
             foreach ($rateLimitingConfig['providers'] as $providerId => $providerLimits) {
@@ -480,47 +687,41 @@ final class LingodaAiBundle extends AbstractBundle
                     $limitConfig = $providerLimits[$type];
                     $serviceId = sprintf('lingoda_ai.rate_limiter.%s_%s', $providerId, $type);
 
-                    try {
-                        // Create storage adapter for rate limiter
-                        $storageServiceId = is_string($rateLimitingConfig['storage'] ?? null) ? $rateLimitingConfig['storage'] : 'cache.rate_limiter';
-                        $storageAdapterServiceId = sprintf('lingoda_ai.rate_limiter_storage.%s_%s', $providerId, $type);
+                    // Create storage adapter for rate limiter
+                    $storageServiceId = is_string($rateLimitingConfig['storage'] ?? null) ? $rateLimitingConfig['storage'] : 'cache.rate_limiter';
+                    $storageAdapterServiceId = sprintf('lingoda_ai.rate_limiter_storage.%s_%s', $providerId, $type);
 
-                        $storageAdapterDef = new Definition(CacheStorage::class, [
-                            new Reference($storageServiceId),
-                        ]);
-                        $builder->setDefinition($storageAdapterServiceId, $storageAdapterDef);
+                    $storageAdapterDef = new Definition(CacheStorage::class, [
+                        new Reference($storageServiceId),
+                    ]);
+                    $builder->setDefinition($storageAdapterServiceId, $storageAdapterDef);
 
-                        // Register the rate limiter factory
-                        $rateLimiterDef = new Definition(RateLimiterFactory::class, [
-                            [
-                                'id' => sprintf('%s_%s', $providerId, $type),
-                                'policy' => $limitConfig['policy'] ?? 'token_bucket',
-                                'limit' => $limitConfig['limit'] ?? 60,
-                                'rate' => $limitConfig['rate'] ?? ['interval' => '1 minute', 'amount' => 60],
-                            ],
-                            new Reference($storageAdapterServiceId),
-                            new Reference(is_string($rateLimitingConfig['lock_factory'] ?? null) ? $rateLimitingConfig['lock_factory'] : 'lock.factory'),
-                        ]);
+                    // Register the rate limiter factory
+                    $rateLimiterDef = new Definition(RateLimiterFactory::class, [
+                        [
+                            'id' => sprintf('%s_%s', $providerId, $type),
+                            'policy' => $limitConfig['policy'] ?? 'token_bucket',
+                            'limit' => $limitConfig['limit'] ?? 60,
+                            'rate' => $limitConfig['rate'] ?? ['interval' => '1 minute', 'amount' => 60],
+                        ],
+                        new Reference($storageAdapterServiceId),
+                        new Reference(is_string($rateLimitingConfig['lock_factory'] ?? null) ? $rateLimitingConfig['lock_factory'] : 'lock.factory'),
+                    ]);
+                    $builder->setDefinition($serviceId, $rateLimiterDef);
+                    $rateLimiterServiceMap[$providerId][$type] = $serviceId;
+                    $locatorServices[$serviceId] = new Reference($serviceId);
 
-                        // Make service public for testing
-                        $rateLimiterDef->setPublic(true);
-                        $builder->setDefinition($serviceId, $rateLimiterDef);
-                        $rateLimiterServiceMap[$providerId][$type] = $serviceId;
-
-                        // Also register with the standard Symfony naming convention for manual access
-                        $aliasId = sprintf('limiter.%s_%s', $providerId, $type);
-                        $builder->setAlias($aliasId, $serviceId);
-                        $builder->getAlias($aliasId)->setPublic(true);
-                    } catch (\Exception $e) {
-                        // Silently continue on registration failure
-                    }
+                    // Also register with the standard Symfony naming convention for manual access
+                    $aliasId = sprintf('limiter.%s_%s', $providerId, $type);
+                    $builder->setAlias($aliasId, $serviceId);
+                    $builder->getAlias($aliasId)->setPublic(true);
                 }
             }
         }
 
         // Register the external rate limiter service
         $externalRateLimiterDef = new Definition(BundleExternalRateLimiter::class, [
-            new Reference('service_container'),
+            ServiceLocatorTagPass::register($builder, $locatorServices),
             $rateLimiterServiceMap,
         ]);
         $externalRateLimiterDef->setPublic(true);
@@ -549,6 +750,12 @@ final class LingodaAiBundle extends AbstractBundle
                 'api_key' => '%env(GEMINI_API_KEY)%',
                 'default_model' => GeminiChatModel::GEMINI_2_5_FLASH->value,
             ],
+            // No api_key: region and credentials come from the async-aws runtime client
+            AIProvider::BEDROCK->value => [],
+            AIProvider::TYPESAFE->value => [
+                'api_key' => '%env(TYPESAFE_API_KEY)%',
+                'default_model' => DecisionModel::JEV_LATEST->value,
+            ],
             default => [
                 'api_key' => '',
                 'default_model' => '',
@@ -574,6 +781,14 @@ final class LingodaAiBundle extends AbstractBundle
                 'requests' => ['limit' => 1000, 'amount' => 1000],
                 'tokens' => ['limit' => 1000000, 'amount' => 1000000],
             ],
+            AIProvider::BEDROCK->value => [
+                'requests' => ['limit' => 60, 'amount' => 60],
+                'tokens' => ['limit' => 100000, 'amount' => 100000],
+            ],
+            AIProvider::TYPESAFE->value => [
+                'requests' => ['limit' => 1080, 'amount' => 1080], // 90% of 1,200 RPM
+                'tokens' => ['limit' => 13500000, 'amount' => 13500000], // 90% of 250K tokens per second
+            ],
         ];
 
         $providerDefaults = $defaults[$provider] ?? [
@@ -596,5 +811,69 @@ final class LingodaAiBundle extends AbstractBundle
                 'amount' => $typeDefaults['amount'],
             ],
         ];
+    }
+
+    /**
+     * A DataSanitizer carrying sanitization.patterns next to the SDK defaults, or null when there are none.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function createSanitizerDefinition(array $config, ?Reference $loggerRef): ?Definition
+    {
+        $patterns = is_array($config['sanitization'] ?? null) ? ($config['sanitization']['patterns'] ?? []) : [];
+        if (!is_array($patterns) || $patterns === []) {
+            return null;
+        }
+
+        $logger = $loggerRef !== null ? ['$logger' => $loggerRef] : [];
+        $filter = new Definition(SensitiveContentFilter::class, [
+            '$patternRegistry' => new Definition(PatternRegistry::class, [new Definition(DefaultPatterns::class), [], array_values($patterns)]),
+            ...$logger,
+        ]);
+
+        // Same settings as DataSanitizer::createDefault(), with the extra patterns
+        return new Definition(DataSanitizer::class, [
+            '$filter' => $filter,
+            '$enabled' => true,
+            '$auditLog' => true,
+            ...$logger,
+            '$attributeSanitizer' => (new Definition(AttributeSanitizer::class))
+                ->setFactory([AttributeSanitizer::class, 'createDefault'])
+                ->setArguments(['$fallbackFilter' => $filter, ...$logger]),
+        ]);
+    }
+
+    /**
+     * @throws \InvalidArgumentException
+     */
+    private static function validateProviderConfig(string $providerName, mixed $providerConfig): void
+    {
+        if (AIProvider::tryFrom($providerName) === null) {
+            throw new \InvalidArgumentException(sprintf(
+                'Unknown provider "%s". Supported providers: %s.',
+                $providerName,
+                implode(', ', array_map(static fn (AIProvider $provider): string => $provider->value, AIProvider::cases()))
+            ));
+        }
+
+        if (!is_array($providerConfig)) {
+            return;
+        }
+
+        if ($providerName === AIProvider::BEDROCK->value) {
+            if (empty($providerConfig['runtime_client'])) {
+                throw new \InvalidArgumentException('providers.bedrock.runtime_client is required: the service id of an AsyncAws\\BedrockRuntime\\BedrockRuntimeClient.');
+            }
+            if (isset($providerConfig['http_client'])) {
+                throw new \InvalidArgumentException('providers.bedrock.http_client is not supported: configure the HTTP client on the runtime client, an injected one drops the async-aws retries.');
+            }
+            foreach (['api_key', 'organization'] as $key) {
+                if (isset($providerConfig[$key])) {
+                    throw new \InvalidArgumentException(sprintf('providers.bedrock.%s is not supported: credentials come from the runtime client.', $key));
+                }
+            }
+        } elseif (isset($providerConfig['runtime_client'])) {
+            throw new \InvalidArgumentException(sprintf('providers.%s.runtime_client is only supported for bedrock.', $providerName));
+        }
     }
 }

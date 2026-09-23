@@ -21,6 +21,8 @@ use Lingoda\AiSdk\Result\BinaryResult;
 use Lingoda\AiSdk\Result\ResultInterface;
 use Lingoda\AiSdk\Result\StreamResult;
 use Lingoda\AiSdk\Result\TextResult;
+use Lingoda\AiSdk\Security\DataSanitizer;
+use Psr\Log\LoggerInterface;
 
 /**
  * Single-provider platform that wraps the AI SDK Platform with one client.
@@ -30,9 +32,16 @@ final readonly class ProviderPlatform implements PlatformInterface
 {
     private PlatformInterface $platform;
 
-    public function __construct(ClientInterface $client)
-    {
-        $this->platform = new Platform([$client]);
+    /**
+     * Takes the same sanitization and logging settings as the main platform, so both treat prompts the same way.
+     */
+    public function __construct(
+        ClientInterface $client,
+        bool $enableSanitization = true,
+        ?DataSanitizer $sanitizer = null,
+        ?LoggerInterface $logger = null,
+    ) {
+        $this->platform = new Platform([$client], $enableSanitization, $sanitizer, $logger);
     }
 
     /**

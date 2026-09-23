@@ -2,7 +2,7 @@
     "name": "lingoda/ai-bundle",
     "type": "symfony-bundle",
     "description": "Symfony Bundle for Lingoda AI PHP SDK with full framework integration",
-    "keywords": ["symfony", "ai", "openai", "anthropic", "gemini", "bundle"],
+    "keywords": ["symfony", "ai", "openai", "anthropic", "gemini", "bedrock", "typesafe", "bundle"],
     "license": "MIT",
     "authors": [
         {
@@ -11,27 +11,33 @@
         }
     ],
     "require": {
-        "php": "^8.3",
-        "lingoda/ai-sdk": "^1.2",
-        "symfony/config": "^6.4|^7.0|^8.0",
-        "symfony/console": "^6.4|^7.0|^8.0",
-        "symfony/dependency-injection": "^6.4|^7.0|^8.0",
-        "symfony/framework-bundle": "^6.4|^7.0|^8.0",
-        "symfony/lock": "^6.4|^7.0|^8.0",
-        "symfony/rate-limiter": "^6.4|^7.0|^8.0",
-        "symfony/yaml": "^6.4|^7.0|^8.0",
+        "php": "^8.4",
+        "lingoda/ai-sdk": "^2.1",
+        "symfony/config": "^7.4|^8.0",
+        "symfony/console": "^7.4|^8.0",
+        "symfony/dependency-injection": "^7.4|^8.0",
+        "symfony/framework-bundle": "^7.4|^8.0",
+        "symfony/lock": "^7.4|^8.0",
+        "symfony/rate-limiter": "^7.4|^8.0",
+        "symfony/yaml": "^7.4|^8.0",
         "webmozart/assert": "^1.11"
     },
     "require-dev": {
+        "async-aws/bedrock-runtime": "^1.3",
         "dg/bypass-finals": "^1.7",
         "matthiasnoback/symfony-dependency-injection-test": "^6.1",
         "nyholm/symfony-bundle-test": "^3.1",
-        "phpunit/phpunit": "^10.5",
         "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-phpunit": "^2.0",
         "phpstan/phpstan-webmozart-assert": "^2.0",
-        "symplify/easy-coding-standard": "^12.0",
-        "symfony/phpunit-bridge": "^6.4|^7.0|^8.0"
+        "phpunit/phpunit": "^10.5",
+        "symfony/ai-bedrock-platform": "~0.13.0",
+        "symfony/phpunit-bridge": "^7.4|^8.0",
+        "symplify/easy-coding-standard": "^12.0"
+    },
+    "suggest": {
+        "async-aws/bedrock-runtime": "Required for the AWS Bedrock provider",
+        "symfony/ai-bedrock-platform": "Required for the AWS Bedrock provider (~0.13.0)"
     },
     "autoload": {
         "psr-4": {
@@ -51,7 +57,7 @@
     },
     "extra": {
         "symfony": {
-            "require": "^6.4|^7.0|^8.0"
+            "require": "^7.4|^8.0"
         }
     },
     "minimum-stability": "stable",

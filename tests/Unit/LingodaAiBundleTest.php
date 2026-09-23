@@ -1,19 +1,17 @@
 <?php
 
-declare(strict_types=1);
+declare(strict_types = 1);
 
 namespace Lingoda\AiBundle\Tests\Unit;
 
 use Lingoda\AiBundle\LingodaAiBundle;
 use Lingoda\AiSdk\Enum\AIProvider;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Config\Definition\Builder\TreeBuilder;
-use Symfony\Component\Config\Definition\ConfigurationInterface;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Extension\Extension;
-use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
 final class LingodaAiBundleTest extends TestCase
 {
@@ -27,7 +25,7 @@ final class LingodaAiBundleTest extends TestCase
     public function testGetContainerExtension(): void
     {
         $extension = $this->bundle->getContainerExtension();
-        
+
         self::assertNotNull($extension);
         self::assertSame('lingoda_ai', $extension->getAlias());
     }
@@ -38,12 +36,12 @@ final class LingodaAiBundleTest extends TestCase
         /** @var Extension $extension */
         $extension = $this->bundle->getContainerExtension();
         $configuration = $extension->getConfiguration([], new ContainerBuilder());
-        
+
         $config = $processor->processConfiguration($configuration, []);
-        
+
         self::assertSame(AIProvider::OPENAI->value, $config['default_provider']);
         self::assertTrue($config['sanitization']['enabled']);
-        self::assertEmpty($config['sanitization']['patterns']);
+        self::assertSame([], $config['sanitization']['patterns']);
         self::assertTrue($config['logging']['enabled']);
         self::assertSame('logger', $config['logging']['service']);
     }
@@ -54,7 +52,7 @@ final class LingodaAiBundleTest extends TestCase
         /** @var Extension $extension */
         $extension = $this->bundle->getContainerExtension();
         $configuration = $extension->getConfiguration([], new ContainerBuilder());
-        
+
         $configs = [
             [
                 'providers' => [
@@ -66,9 +64,9 @@ final class LingodaAiBundleTest extends TestCase
                 ],
             ],
         ];
-        
+
         $config = $processor->processConfiguration($configuration, $configs);
-        
+
         self::assertArrayHasKey('openai', $config['providers']);
         self::assertSame('test_key', $config['providers']['openai']['api_key']);
         self::assertSame('test_org', $config['providers']['openai']['organization']);
@@ -81,14 +79,14 @@ final class LingodaAiBundleTest extends TestCase
         /** @var Extension $extension */
         $extension = $this->bundle->getContainerExtension();
         $configuration = $extension->getConfiguration([], new ContainerBuilder());
-        
+
         $configs = [
             ['default_provider' => 'invalid_provider'],
         ];
-        
+
         $this->expectException(InvalidConfigurationException::class);
         $this->expectExceptionMessage('Invalid default provider "invalid_provider"');
-        
+
         $processor->processConfiguration($configuration, $configs);
     }
 
@@ -98,13 +96,13 @@ final class LingodaAiBundleTest extends TestCase
         /** @var Extension $extension */
         $extension = $this->bundle->getContainerExtension();
         $configuration = $extension->getConfiguration([], new ContainerBuilder());
-        
-        $validProviders = ['openai', 'anthropic', 'gemini'];
-        
+
+        $validProviders = ['openai', 'anthropic', 'gemini', 'bedrock'];
+
         foreach ($validProviders as $provider) {
             $configs = [['default_provider' => $provider]];
             $config = $processor->processConfiguration($configuration, $configs);
-            
+
             self::assertSame($provider, $config['default_provider']);
         }
     }
@@ -115,20 +113,25 @@ final class LingodaAiBundleTest extends TestCase
         /** @var Extension $extension */
         $extension = $this->bundle->getContainerExtension();
         $configuration = $extension->getConfiguration([], new ContainerBuilder());
-        
-        $configs = [
-            [
-                'sanitization' => [
-                    'enabled' => false,
-                    'patterns' => ['/test_\d+/', '/sensitive-\w+/'],
-                ],
-            ],
-        ];
-        
-        $config = $processor->processConfiguration($configuration, $configs);
-        
+
+        $config = $processor->processConfiguration($configuration, [['sanitization' => ['enabled' => false]]]);
+
         self::assertFalse($config['sanitization']['enabled']);
-        self::assertSame(['/test_\d+/', '/sensitive-\w+/'], $config['sanitization']['patterns']);
+    }
+
+    public function testSanitizationPatternsAreAccepted(): void
+    {
+        $config = $this->processConfig(['sanitization' => ['patterns' => ['/secret-\d+/', '/internal-\w+/i']]]);
+
+        self::assertSame(['/secret-\d+/', '/internal-\w+/i'], $config['sanitization']['patterns']);
+    }
+
+    public function testInvalidSanitizationPatternIsRejected(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage('not a valid regular expression');
+
+        $this->processConfig(['sanitization' => ['patterns' => ['/unclosed(/']]]);
     }
 
     public function testLoggingConfiguration(): void
@@ -137,7 +140,7 @@ final class LingodaAiBundleTest extends TestCase
         /** @var Extension $extension */
         $extension = $this->bundle->getContainerExtension();
         $configuration = $extension->getConfiguration([], new ContainerBuilder());
-        
+
         $configs = [
             [
                 'logging' => [
@@ -146,9 +149,9 @@ final class LingodaAiBundleTest extends TestCase
                 ],
             ],
         ];
-        
+
         $config = $processor->processConfiguration($configuration, $configs);
-        
+
         self::assertFalse($config['logging']['enabled']);
         self::assertSame('custom_logger', $config['logging']['service']);
     }
@@ -159,7 +162,7 @@ final class LingodaAiBundleTest extends TestCase
         /** @var Extension $extension */
         $extension = $this->bundle->getContainerExtension();
         $configuration = $extension->getConfiguration([], new ContainerBuilder());
-        
+
         $configs = [
             [
                 'providers' => [
@@ -176,13 +179,13 @@ final class LingodaAiBundleTest extends TestCase
                 ],
             ],
         ];
-        
+
         $config = $processor->processConfiguration($configuration, $configs);
-        
+
         self::assertArrayHasKey('openai', $config['providers']);
         self::assertArrayHasKey('anthropic', $config['providers']);
         self::assertArrayHasKey('gemini', $config['providers']);
-        
+
         self::assertSame('openai_key', $config['providers']['openai']['api_key']);
         self::assertSame('anthropic_key', $config['providers']['anthropic']['api_key']);
         self::assertSame('gemini_key', $config['providers']['gemini']['api_key']);
@@ -200,7 +203,7 @@ final class LingodaAiBundleTest extends TestCase
         self::assertArrayHasKey('organization', $openaiDefaults);
         self::assertArrayHasKey('default_model', $openaiDefaults);
         self::assertSame('%env(OPENAI_API_KEY)%', $openaiDefaults['api_key']);
-        self::assertSame('%env(OPENAI_ORGANIZATION)%', $openaiDefaults['organization']); 
+        self::assertSame('%env(OPENAI_ORGANIZATION)%', $openaiDefaults['organization']);
         self::assertSame('gpt-4o-mini', $openaiDefaults['default_model']);
 
         // Test Anthropic defaults
@@ -278,23 +281,23 @@ final class LingodaAiBundleTest extends TestCase
     {
         $reflection = new \ReflectionClass($this->bundle);
         $method = $reflection->getMethod('getProviderFactoryConfig');
-        
+
         $factoryConfig = $method->invoke($this->bundle);
-        
+
         self::assertIsArray($factoryConfig);
-        
+
         // Test OpenAI configuration
         self::assertArrayHasKey('openai', $factoryConfig);
         self::assertArrayHasKey('factory', $factoryConfig['openai']);
         self::assertArrayHasKey('client', $factoryConfig['openai']);
         self::assertStringContainsString('OpenAI', $factoryConfig['openai']['factory']);
         self::assertStringContainsString('OpenAI', $factoryConfig['openai']['client']);
-        
+
         // Test Anthropic configuration
         self::assertArrayHasKey('anthropic', $factoryConfig);
         self::assertStringContainsString('Anthropic', $factoryConfig['anthropic']['factory']);
         self::assertStringContainsString('Anthropic', $factoryConfig['anthropic']['client']);
-        
+
         // Test Gemini configuration
         self::assertArrayHasKey('gemini', $factoryConfig);
         self::assertStringContainsString('Gemini', $factoryConfig['gemini']['factory']);
@@ -307,7 +310,7 @@ final class LingodaAiBundleTest extends TestCase
         /** @var Extension $extension */
         $extension = $this->bundle->getContainerExtension();
         $configuration = $extension->getConfiguration([], new ContainerBuilder());
-        
+
         $configs = [
             [
                 'rate_limiting' => [
@@ -331,15 +334,15 @@ final class LingodaAiBundleTest extends TestCase
                 ],
             ],
         ];
-        
+
         $config = $processor->processConfiguration($configuration, $configs);
-        
+
         self::assertTrue($config['rate_limiting']['enabled']);
         self::assertSame('custom.rate_limiter', $config['rate_limiting']['storage']);
         self::assertSame('custom.lock.factory', $config['rate_limiting']['lock_factory']);
         self::assertFalse($config['rate_limiting']['enable_retries']);
         self::assertSame(5, $config['rate_limiting']['max_retries']);
-        
+
         // Test that provider rate limiting config is preserved
         self::assertArrayHasKey('openai', $config['rate_limiting']['providers']);
         self::assertSame('sliding_window', $config['rate_limiting']['providers']['openai']['requests']['policy']);
@@ -352,7 +355,7 @@ final class LingodaAiBundleTest extends TestCase
         /** @var Extension $extension */
         $extension = $this->bundle->getContainerExtension();
         $configuration = $extension->getConfiguration([], new ContainerBuilder());
-        
+
         // Test that providing minimal config gets normalized with defaults
         $configs = [
             [
@@ -364,9 +367,9 @@ final class LingodaAiBundleTest extends TestCase
                 ],
             ],
         ];
-        
+
         $config = $processor->processConfiguration($configuration, $configs);
-        
+
         // Should include defaults from getProviderDefaults()
         self::assertArrayHasKey('organization', $config['providers']['openai']);
         self::assertArrayHasKey('default_model', $config['providers']['openai']);
@@ -382,7 +385,7 @@ final class LingodaAiBundleTest extends TestCase
         /** @var Extension $extension */
         $extension = $this->bundle->getContainerExtension();
         $configuration = $extension->getConfiguration([], new ContainerBuilder());
-        
+
         // Test that providing minimal rate limiting config gets normalized with defaults
         $configs = [
             [
@@ -398,13 +401,136 @@ final class LingodaAiBundleTest extends TestCase
                 ],
             ],
         ];
-        
+
         $config = $processor->processConfiguration($configuration, $configs);
-        
+
         // Should include defaults from getRateLimitDefaults() but with our override
         self::assertSame(500, $config['rate_limiting']['providers']['openai']['requests']['limit']);
         self::assertSame('token_bucket', $config['rate_limiting']['providers']['openai']['requests']['policy']); // Default
         self::assertIsArray($config['rate_limiting']['providers']['openai']['requests']['rate']);
         self::assertSame('1 minute', $config['rate_limiting']['providers']['openai']['requests']['rate']['interval']); // Default
+    }
+
+    public function testTypeSafeCannotBeTheDefaultProvider(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage('Invalid default provider "typesafe"');
+
+        $this->processConfig(['default_provider' => 'typesafe']);
+    }
+
+    public function testBedrockConfiguration(): void
+    {
+        $config = $this->processConfig(['providers' => ['bedrock' => [
+            'runtime_client' => 'async_aws.client.bedrock_runtime',
+            'default_model' => 'amazon.nova-2-lite-v1:0',
+        ]]]);
+
+        $bedrock = $config['providers']['bedrock'];
+        self::assertSame('async_aws.client.bedrock_runtime', $bedrock['runtime_client']);
+        self::assertSame('amazon.nova-2-lite-v1:0', $bedrock['default_model']);
+        self::assertArrayNotHasKey('api_key', $bedrock);
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>, string}>
+     */
+    public static function invalidProviderConfigs(): iterable
+    {
+        yield 'bedrock without runtime client' => [
+            ['bedrock' => ['default_model' => 'amazon.nova-2-lite-v1:0']],
+            'providers.bedrock.runtime_client is required',
+        ];
+        yield 'bedrock with http client' => [
+            ['bedrock' => ['runtime_client' => 'aws', 'http_client' => 'my_client']],
+            'providers.bedrock.http_client is not supported',
+        ];
+        yield 'bedrock with api key' => [
+            ['bedrock' => ['runtime_client' => 'aws', 'api_key' => 'key']],
+            'providers.bedrock.api_key is not supported',
+        ];
+        yield 'bedrock with organization' => [
+            ['bedrock' => ['runtime_client' => 'aws', 'organization' => 'org']],
+            'providers.bedrock.organization is not supported',
+        ];
+        yield 'runtime client on openai' => [
+            ['openai' => ['api_key' => 'key', 'runtime_client' => 'aws']],
+            'providers.openai.runtime_client is only supported for bedrock',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $providers
+     */
+    #[DataProvider('invalidProviderConfigs')]
+    public function testInvalidProviderConfigIsRejected(array $providers, string $message): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage($message);
+
+        $this->processConfig(['providers' => $providers]);
+    }
+
+    public function testTypeSafeDefaults(): void
+    {
+        $config = $this->processConfig(['providers' => ['typesafe' => ['api_key' => 'key']]]);
+
+        $typesafe = $config['providers']['typesafe'];
+        self::assertSame('key', $typesafe['api_key']);
+        self::assertSame('jev-latest', $typesafe['default_model']);
+        self::assertArrayNotHasKey('base_url', $typesafe);
+    }
+
+    /**
+     * @return iterable<string, array{string, int, int}>
+     */
+    public static function bundleRateLimitDefaults(): iterable
+    {
+        yield 'openai' => ['openai', 180, 450000];
+        yield 'anthropic' => ['anthropic', 100, 100000];
+        yield 'gemini' => ['gemini', 1000, 1000000];
+        yield 'bedrock' => ['bedrock', 60, 100000];
+        yield 'typesafe' => ['typesafe', 1080, 13500000];
+    }
+
+    #[DataProvider('bundleRateLimitDefaults')]
+    public function testBundleRateLimitDefaultsFillAnEmptyProviderBlock(string $provider, int $requests, int $tokens): void
+    {
+        $config = $this->processConfig(['rate_limiting' => ['providers' => [$provider => ['requests' => [], 'tokens' => []]]]]);
+
+        $limits = $config['rate_limiting']['providers'][$provider];
+        self::assertSame($requests, $limits['requests']['limit']);
+        self::assertSame($requests, $limits['requests']['rate']['amount']);
+        self::assertSame($tokens, $limits['tokens']['limit']);
+        self::assertSame($tokens, $limits['tokens']['rate']['amount']);
+    }
+
+    public function testUnknownProviderIsRejected(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage('Unknown provider "openia". Supported providers: openai, anthropic, gemini, bedrock, typesafe.');
+
+        $this->processConfig(['providers' => ['openia' => ['api_key' => 'key']]]);
+    }
+
+    public function testUnknownProviderRateLimitsFallBackToConservativeDefaults(): void
+    {
+        $config = $this->processConfig(['rate_limiting' => ['providers' => ['custom' => ['requests' => [], 'tokens' => []]]]]);
+
+        self::assertSame(60, $config['rate_limiting']['providers']['custom']['requests']['limit']);
+        self::assertSame(60000, $config['rate_limiting']['providers']['custom']['tokens']['limit']);
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     *
+     * @return array<string, mixed>
+     */
+    private function processConfig(array $config): array
+    {
+        /** @var Extension $extension */
+        $extension = $this->bundle->getContainerExtension();
+
+        return (new Processor())->processConfiguration($extension->getConfiguration([], new ContainerBuilder()), [$config]);
     }
 }
