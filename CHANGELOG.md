@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.0
+
+### Changed
+- The OpenAI default model is `gpt-6-luna`, was `gpt-4o-mini`. OpenAI removes `gpt-4o`, `gpt-4o-mini`, `gpt-4.1` and `gpt-4.1-mini` from the API on 14 January 2027 and names `gpt-6-luna` as the replacement. An application that sets `providers.openai.default_model` is unaffected; one that relies on the bundle default would have stopped working on that date.
+- Requires `lingoda/ai-sdk` ^2.4, which is where the GPT-6 models are defined. It also sends `max_completion_tokens` rather than `max_tokens` for them, and keeps `reasoning_effort` at `none` by default so `temperature` stays usable.
+- `ai:test-rate-limiting` builds its mock client on `gpt-6-luna` rather than `gpt-4o-mini`. It makes no real request; the id just stops naming a retiring model.
+
+### Fixed
+- `AiTestRateLimitingCommand::executeMockTest()` took an `$output` it never used, writing through `SymfonyStyle` instead. PHPStan 2.3 reports it; 2.2 did not, and CI resolves PHPStan fresh because this repo keeps no lockfile, so main was already failing on it.
+
 ## 2.0.0
 
 ### Added

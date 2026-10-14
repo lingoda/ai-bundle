@@ -152,7 +152,7 @@ class MyService
     public function compareModels(string $prompt): array
     {
         return [
-            'openai' => $this->platform->ask($prompt, 'gpt-4o-mini')->getContent(),
+            'openai' => $this->platform->ask($prompt, 'gpt-6-luna')->getContent(),
             'anthropic' => $this->platform->ask($prompt, 'claude-3-5-haiku-20241022')->getContent(),
             'gemini' => $this->platform->ask($prompt, 'gemini-2.5-flash-002')->getContent(),
         ];

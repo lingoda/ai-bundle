@@ -32,7 +32,7 @@ lingoda_ai:
     providers:
         openai:
             api_key: '%env(OPENAI_API_KEY)%'
-            default_model: 'gpt-4o-mini'
+            default_model: 'gpt-6-luna'
             timeout: 30
         anthropic:
             api_key: '%env(ANTHROPIC_API_KEY)%'

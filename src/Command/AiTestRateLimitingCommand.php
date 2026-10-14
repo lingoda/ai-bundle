@@ -101,7 +101,7 @@ Example usage:
         $io->title('AI Bundle Rate Limiting Test');
 
         if ($useMock) {
-            return $this->executeMockTest($input, $output, $io, $numRequests, $delay);
+            return $this->executeMockTest($input, $io, $numRequests, $delay);
         }
 
         // Use actual Bundle configuration
@@ -214,7 +214,7 @@ Example usage:
     /**
      * @throws ModelNotFoundException
      */
-    private function executeMockTest(InputInterface $input, OutputInterface $output, SymfonyStyle $io, int $numRequests, int $delay): int
+    private function executeMockTest(InputInterface $input, SymfonyStyle $io, int $numRequests, int $delay): int
     {
         $limitOption = $input->getOption('limit');
         $rateLimit = is_numeric($limitOption) ? (int) $limitOption : 2;
@@ -231,7 +231,7 @@ Example usage:
         $io->section('Setting up rate-limited mock client');
         $client = $this->createRateLimitedMockClient($rateLimit, $io);
         $platform = new Platform([$client]);
-        $model = $client->getProvider()->getModel('gpt-4o-mini');
+        $model = $client->getProvider()->getModel('gpt-6-luna');
 
         $io->section('Making requests');
 
