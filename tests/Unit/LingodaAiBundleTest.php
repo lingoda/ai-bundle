@@ -204,7 +204,7 @@ final class LingodaAiBundleTest extends TestCase
         self::assertArrayHasKey('default_model', $openaiDefaults);
         self::assertSame('%env(OPENAI_API_KEY)%', $openaiDefaults['api_key']);
         self::assertSame('%env(OPENAI_ORGANIZATION)%', $openaiDefaults['organization']);
-        self::assertSame('gpt-4o-mini', $openaiDefaults['default_model']);
+        self::assertSame('gpt-6-luna', $openaiDefaults['default_model']);
 
         // Test Anthropic defaults
         $anthropicDefaults = $method->invoke($this->bundle, 'anthropic');
@@ -376,7 +376,7 @@ final class LingodaAiBundleTest extends TestCase
         self::assertArrayHasKey('timeout', $config['providers']['openai']);
         self::assertSame('test_key', $config['providers']['openai']['api_key']);
         self::assertSame('%env(OPENAI_ORGANIZATION)%', $config['providers']['openai']['organization']); // Default env var
-        self::assertSame('gpt-4o-mini', $config['providers']['openai']['default_model']);
+        self::assertSame('gpt-6-luna', $config['providers']['openai']['default_model']);
     }
 
     public function testNormalizationAppliesToRateLimitProviders(): void

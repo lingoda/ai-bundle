@@ -739,7 +739,10 @@ final class LingodaAiBundle extends AbstractBundle
         return match ($provider) {
             AIProvider::OPENAI->value => [
                 'api_key' => '%env(OPENAI_API_KEY)%',
-                'default_model' => OpenAIChatModel::GPT_4O_MINI->value,
+                // gpt-4o-mini leaves the API on 14 January 2027, and gpt-6-luna is OpenAI's
+                // named replacement for it. An application that configures default_model is
+                // unaffected either way; this is what the ones that do not inherit.
+                'default_model' => OpenAIChatModel::GPT_6_LUNA->value,
                 'organization' => '%env(OPENAI_ORGANIZATION)%', // OpenAI-specific field
             ],
             AIProvider::ANTHROPIC->value => [

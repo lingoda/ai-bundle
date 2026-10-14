@@ -231,7 +231,7 @@ Example usage:
         $io->section('Setting up rate-limited mock client');
         $client = $this->createRateLimitedMockClient($rateLimit, $io);
         $platform = new Platform([$client]);
-        $model = $client->getProvider()->getModel('gpt-4o-mini');
+        $model = $client->getProvider()->getModel('gpt-6-luna');
 
         $io->section('Making requests');
 
