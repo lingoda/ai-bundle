@@ -308,6 +308,27 @@ final class ServiceRegistrationTest extends AbstractExtensionTestCase
         self::assertInstanceOf(Reference::class, $baseGeminiArguments['$logger']);
     }
 
+    public function testOpenAIBaseUriIsPassedThroughWhenSet(): void
+    {
+        $config = $this->getFullTestConfiguration();
+        $config['providers']['openai']['base_uri'] = 'eu.api.openai.com/v1';
+
+        $this->load($config);
+
+        $arguments = $this->container->findDefinition('lingoda_ai.client.openai.base')->getArguments();
+
+        self::assertSame('eu.api.openai.com/v1', $arguments['$baseUri']);
+    }
+
+    public function testOpenAIBaseUriIsAbsentWhenNotSet(): void
+    {
+        $this->load($this->getFullTestConfiguration());
+
+        $arguments = $this->container->findDefinition('lingoda_ai.client.openai.base')->getArguments();
+
+        self::assertArrayNotHasKey('$baseUri', $arguments);
+    }
+
     public function testOpenAIClientWithoutOrganization(): void
     {
         $config = $this->getFullTestConfiguration();
