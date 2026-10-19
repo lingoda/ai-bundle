@@ -80,6 +80,9 @@ final class LingodaAiBundle extends AbstractBundle
                         ->children()
                             ->scalarNode('api_key')->end()
                             ->scalarNode('organization')->end() // OpenAI-specific, optional for others
+                            ->scalarNode('base_uri')
+                                ->info('OpenAI only: host and path without a scheme, e.g. eu.api.openai.com/v1 for EU data residency. Empty keeps api.openai.com/v1')
+                            ->end()
                             ->scalarNode('default_model')->end()
                             ->scalarNode('http_client')
                                 ->info('Custom HTTP client service ID for this provider')
@@ -392,6 +395,11 @@ final class LingodaAiBundle extends AbstractBundle
         // Add provider-specific arguments
         if ($providerName === AIProvider::OPENAI->value && !empty($providerConfig['organization'])) {
             $factoryArgs['$organization'] = $providerConfig['organization'];
+        }
+
+        if ($providerName === AIProvider::OPENAI->value && !empty($providerConfig['base_uri'])) {
+            Assert::string($providerConfig['base_uri']);
+            $factoryArgs['$baseUri'] = $providerConfig['base_uri'];
         }
 
         // Add timeout if specified

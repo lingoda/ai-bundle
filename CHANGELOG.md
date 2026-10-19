@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.0
+
+### Added
+- `providers.openai.base_uri`: the host and path with no scheme, e.g. `eu.api.openai.com/v1`, so OpenAI traffic can go to a regional endpoint for EU data residency. Absent or empty keeps `api.openai.com/v1`. OpenAI only, like `organization`, and ignored for the other providers.
+
+### Changed
+- Requires `lingoda/ai-sdk` ^2.6, which is where the factory's `$baseUri` argument lives.
+
 ## 2.1.0
 
 ### Changed
